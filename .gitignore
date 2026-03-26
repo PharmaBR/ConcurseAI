@@ -1,9 +1,9 @@
 # Ambiente — nunca commitar segredos
 .env
+**/.env
 .env.local
+**/.env.local
 .env.*.local
-backend/.env
-frontend/.env.local
 
 # macOS
 .DS_Store
