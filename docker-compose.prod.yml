@@ -1,0 +1,32 @@
+# Overrides de produção — use junto com docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Pré-requisitos no servidor:
+#   cp .env.example .env
+#   # editar .env com os valores reais
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  backend:
+    environment:
+      DJANGO_SETTINGS_MODULE: concurseai.settings.prod
+    restart: unless-stopped
+
+  worker:
+    environment:
+      DJANGO_SETTINGS_MODULE: concurseai.settings.prod
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    # sobrescreve o volume de dev (não monta código-fonte em produção)
+    volumes: []
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped

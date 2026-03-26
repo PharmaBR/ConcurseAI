@@ -1,0 +1,43 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (uvicorn ASGI)",
+      "runtimeExecutable": "/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/backend/.venv/bin/python",
+      "runtimeArgs": [
+        "-m", "uvicorn", "concurseai.asgi:application",
+        "--host", "::",
+        "--port", "8000",
+        "--reload"
+      ],
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "concurseai.settings.dev"
+      },
+      "cwd": "/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/backend",
+      "port": 8000
+    },
+    {
+      "name": "Frontend (Next.js)",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["node_modules/.bin/next", "dev"],
+      "cwd": "/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/frontend",
+      "port": 3000
+    },
+    {
+      "name": "Celery Worker",
+      "runtimeExecutable": "/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/backend/.venv/bin/python",
+      "runtimeArgs": [
+        "-m", "celery",
+        "-A", "concurseai",
+        "worker",
+        "-l", "info"
+      ],
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "concurseai.settings.dev"
+      },
+      "cwd": "/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/backend",
+      "autoPort": true,
+      "port": 9999
+    }
+  ]
+}

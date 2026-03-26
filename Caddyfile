@@ -1,0 +1,23 @@
+# Substitua "concurseai.com.br" pelo seu domínio.
+# Caddy obtém e renova o certificado SSL automaticamente via Let's Encrypt.
+#
+# Para usar: copie este arquivo para /etc/caddy/Caddyfile no servidor
+# e rode: systemctl reload caddy
+
+concurseai.com.br {
+    # Django admin, API REST e arquivos estáticos do backend
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+    handle /admin/* {
+        reverse_proxy localhost:8000
+    }
+    handle /static/* {
+        reverse_proxy localhost:8000
+    }
+
+    # Tudo o mais vai para o Next.js
+    handle {
+        reverse_proxy localhost:3000
+    }
+}

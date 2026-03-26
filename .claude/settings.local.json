@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker version:*)",
+      "Bash(docker compose:*)",
+      "Bash(pip3 --version)",
+      "Bash(pip --version)",
+      "Bash(pyenv versions:*)",
+      "Bash(brew list:*)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/**)",
+      "Read(//Users/pharmabio/.pyenv/**)",
+      "Bash(python3.13 -m venv .venv)",
+      "Bash(/usr/local/bin/python3.13 -m venv \"/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/backend/.venv\")",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python manage.py migrate)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python manage.py makemigrations)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python manage.py makemigrations users concursos trilhas llm)",
+      "Bash(grep -E \"Applying [a-z]|OK$\")",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python manage.py showmigrations)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python manage.py createsuperuser --email admin@concurseai.com --username admin)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python -c \":*)",
+      "Bash(DJANGO_SETTINGS_MODULE=concurseai.settings.dev .venv/bin/python -m pytest tests/ -v)",
+      "Bash(curl -s http://localhost:8000/api/auth/token/ -X POST -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@concurseai.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin123\"\"\"\"}')",
+      "Bash(python3 -m json.tool)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(/usr/local/bin/node /usr/local/bin/npm install -D tailwindcss postcss autoprefixer)",
+      "Bash(/usr/local/bin/node /usr/local/bin/npm install -D tailwindcss@3 postcss autoprefixer)",
+      "Bash(curl -s http://127.0.0.1:8000/api/auth/token/ -X POST -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@concurseai.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin123\"\"\"\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''access'''']\\)\")",
+      "Bash(python -m pytest tests/test_llm_service.py -v)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python manage.py shell -c \":*)",
+      "Bash(curl -v -X POST http://127.0.0.1:8000/api/users/token/ -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@concurseai.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin123\"\"\"\"}')",
+      "Bash(curl -s http://127.0.0.1:8000/api/)",
+      "Bash(chmod +x \"/Users/pharmabio/Code/ClaudeCode/Projeto ConcursoAI/deploy.sh\")"
+    ]
+  }
+}
