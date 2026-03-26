@@ -2,6 +2,9 @@
 .env.local
 .env.*.local
 
+# Não ignorar public/
+!public/
+
 # Next.js
 .next/
 out/
