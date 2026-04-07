@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     OPENAI_MODEL=(str, "gpt-4o-mini"),
-    OPENAI_MAX_TOKENS=(int, 2048),
+    OPENAI_MAX_TOKENS=(int, 8192),
 )
 
 environ.Env.read_env(BASE_DIR / ".env")
