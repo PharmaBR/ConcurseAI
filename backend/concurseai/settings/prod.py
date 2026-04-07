@@ -8,6 +8,11 @@ CORS_ALLOWED_ORIGINS = env.list(  # noqa: F405
     default=[],
 )
 
+CSRF_TRUSTED_ORIGINS = env.list(  # noqa: F405
+    "CSRF_TRUSTED_ORIGINS",
+    default=[],
+)
+
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 # Defina como True apenas se o Django termina o SSL diretamente.
