@@ -22,11 +22,12 @@ interface Props {
   concurso: Concurso;
   salvo: boolean;
   savedId?: number;
+  trilhaId?: string;
   onSalvar: (id: string) => Promise<void>;
   onRemoverSalvo: (id: number) => Promise<void>;
 }
 
-export function ConcursoCard({ concurso, salvo, savedId, onSalvar, onRemoverSalvo }: Props) {
+export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onRemoverSalvo }: Props) {
   const router = useRouter();
   const [gerando, setGerando] = useState(false);
   const [segundos, setSegundos] = useState(0);
@@ -106,17 +107,26 @@ export function ConcursoCard({ concurso, salvo, savedId, onSalvar, onRemoverSalv
       )}
 
       <div className="flex gap-2 mt-1">
-        <button
-          onClick={handleGerarTrilha}
-          disabled={gerando}
-          className={`flex-1 text-white text-sm py-1.5 rounded transition-colors ${
-            gerando
-              ? "bg-blue-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {gerando ? `Gerando trilha... ${segundos}s` : "Gerar trilha"}
-        </button>
+        {trilhaId ? (
+          <button
+            onClick={() => router.push(`/trilha/${trilhaId}`)}
+            className="flex-1 bg-green-600 text-white text-sm py-1.5 rounded hover:bg-green-700 transition-colors"
+          >
+            Ver trilha
+          </button>
+        ) : (
+          <button
+            onClick={handleGerarTrilha}
+            disabled={gerando}
+            className={`flex-1 text-white text-sm py-1.5 rounded transition-colors ${
+              gerando
+                ? "bg-blue-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {gerando ? `Gerando trilha... ${segundos}s` : "Gerar trilha"}
+          </button>
+        )}
         <button
           onClick={handleToggleSalvo}
           className={`px-3 py-1.5 text-sm rounded border ${

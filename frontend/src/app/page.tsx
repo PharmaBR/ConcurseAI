@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ConcursoList } from "@/components/concursos/ConcursoList";
 import { useConcursos } from "@/hooks/useConcursos";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // TODO FASE 3: substituir cards estáticos por <C1Component> da Thesys
 
@@ -10,6 +12,24 @@ export default function Home() {
   const { concursos, salvos, loading, erro, buscar, salvar, removerSalvo } = useConcursos();
   const [statusFiltro, setStatusFiltro] = useState("");
   const [areaFiltro, setAreaFiltro] = useState("");
+  const [trilhasMap, setTrilhasMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/trilhas/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        const list = data.results ?? data;
+        const map: Record<string, string> = {};
+        list.forEach((t: { id: string; concurso: string | { id: string } }) => {
+          const concursoId = typeof t.concurso === "string" ? t.concurso : t.concurso.id;
+          map[concursoId] = t.id;
+        });
+        setTrilhasMap(map);
+      });
+  }, []);
 
   const salvosIds = new Set(salvos.map((s) => s.concurso.id));
 
@@ -71,6 +91,7 @@ export default function Home() {
           concursos={concursos}
           salvosIds={salvosIds}
           salvos={salvos}
+          trilhasMap={trilhasMap}
           onSalvar={salvar}
           onRemoverSalvo={removerSalvo}
         />

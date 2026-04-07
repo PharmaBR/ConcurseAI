@@ -7,11 +7,12 @@ interface Props {
   concursos: Concurso[];
   salvosIds: Set<string>;
   salvos: ConcursoSalvo[];
+  trilhasMap: Record<string, string>;
   onSalvar: (id: string) => Promise<void>;
   onRemoverSalvo: (id: number) => Promise<void>;
 }
 
-export function ConcursoList({ concursos, salvosIds, salvos, onSalvar, onRemoverSalvo }: Props) {
+export function ConcursoList({ concursos, salvosIds, salvos, trilhasMap, onSalvar, onRemoverSalvo }: Props) {
   if (concursos.length === 0) {
     return (
       <p className="text-gray-400 text-center py-12">
@@ -30,6 +31,7 @@ export function ConcursoList({ concursos, salvosIds, salvos, onSalvar, onRemover
             concurso={concurso}
             salvo={salvosIds.has(concurso.id)}
             savedId={salvoEntry?.id}
+            trilhaId={trilhasMap[concurso.id]}
             onSalvar={onSalvar}
             onRemoverSalvo={onRemoverSalvo}
           />
