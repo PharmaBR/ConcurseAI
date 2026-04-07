@@ -23,8 +23,6 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-    # sobrescreve o volume de dev (não monta código-fonte em produção)
-    volumes: []
     restart: unless-stopped
 
   postgres:

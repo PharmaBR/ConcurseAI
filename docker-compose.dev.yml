@@ -1,0 +1,15 @@
+# Volumes para hot-reload em desenvolvimento local.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+
+  worker:
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
