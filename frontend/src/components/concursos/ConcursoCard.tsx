@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Concurso } from "@/hooks/useConcursos";
 
@@ -27,6 +28,8 @@ interface Props {
 
 export function ConcursoCard({ concurso, salvo, savedId, onSalvar, onRemoverSalvo }: Props) {
   const router = useRouter();
+  const [gerando, setGerando] = useState(false);
+  const [segundos, setSegundos] = useState(0);
 
   async function handleToggleSalvo() {
     if (salvo && savedId !== undefined) {
@@ -43,17 +46,27 @@ export function ConcursoCard({ concurso, salvo, savedId, onSalvar, onRemoverSalv
       return;
     }
 
-    const res = await fetch(`${API_URL}/api/llm/trilha/${concurso.id}/`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    setGerando(true);
+    setSegundos(0);
+    const intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
 
-    if (res.ok) {
-      const data = await res.json();
-      router.push(`/trilha/${data.trilha_id}`);
-    } else {
-      const data = await res.json();
-      alert(data.detail || "Erro ao gerar trilha.");
+    try {
+      const res = await fetch(`${API_URL}/api/llm/trilha/${concurso.id}/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/trilha/${data.trilha_id}`);
+      } else {
+        const data = await res.json();
+        alert(data.detail || "Erro ao gerar trilha.");
+      }
+    } finally {
+      clearInterval(intervalo);
+      setGerando(false);
+      setSegundos(0);
     }
   }
 
@@ -95,9 +108,14 @@ export function ConcursoCard({ concurso, salvo, savedId, onSalvar, onRemoverSalv
       <div className="flex gap-2 mt-1">
         <button
           onClick={handleGerarTrilha}
-          className="flex-1 bg-blue-600 text-white text-sm py-1.5 rounded hover:bg-blue-700"
+          disabled={gerando}
+          className={`flex-1 text-white text-sm py-1.5 rounded transition-colors ${
+            gerando
+              ? "bg-blue-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
-          Gerar trilha
+          {gerando ? `Gerando trilha... ${segundos}s` : "Gerar trilha"}
         </button>
         <button
           onClick={handleToggleSalvo}
