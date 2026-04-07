@@ -8,6 +8,10 @@ CORS_ALLOWED_ORIGINS = env.list(  # noqa: F405
     default=[],
 )
 
+# Permite todas as origens quando não há domínio com HTTPS configurado.
+# Substitua por False e defina CORS_ALLOWED_ORIGINS quando tiver domínio.
+CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)  # noqa: F405
+
 CSRF_TRUSTED_ORIGINS = env.list(  # noqa: F405
     "CSRF_TRUSTED_ORIGINS",
     default=[],
