@@ -157,14 +157,29 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
     setExpanded((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
   }
 
-  function handleQuizConcluido(estrelas: number, tipo: string, referencia: string) {
-    if (tipo === "modulo") {
-      setQuizEstrelas(estrelas);
-    }
-    // Dispara refresh da proficiência via GET /api/trilhas/ não é necessário aqui —
-    // fazemos uma atualização otimista local baseada nos dados do resultado.
-    // A API retorna melhor_score e dominado mas não o objeto completo, então apenas
-    // setamos as estrelas e deixamos a próxima renderização do servidor atualizar o resto.
+  function handleQuizConcluido(
+    estrelas: number,
+    tipo: string,
+    referencia: string,
+    resultado: { melhor_score: number; acertos: number; total: number; dominado: boolean }
+  ) {
+    if (tipo === "modulo") setQuizEstrelas(estrelas);
+
+    // Atualização otimista da proficiência — evita refresh de página
+    const entry: ProficienciaEntry = {
+      melhor_acertos: Math.round(resultado.melhor_score * resultado.total),
+      total: resultado.total,
+      score: resultado.melhor_score,
+      dominado: resultado.dominado,
+      tentativas: 1,
+    };
+
+    setProficiencia((prev) => {
+      if (tipo === "modulo") return { ...prev, modulo: entry };
+      if (tipo === "topico") return { ...prev, topicos: { ...prev.topicos, [referencia]: entry } };
+      if (tipo === "subtopico") return { ...prev, subtopicos: { ...prev.subtopicos, [referencia]: entry } };
+      return prev;
+    });
   }
 
   const doneCount = checked.filter(Boolean).length;

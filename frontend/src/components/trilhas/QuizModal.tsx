@@ -39,7 +39,12 @@ interface Props {
   topicos: string[] | TopicoAninhado[];
   proficiencia?: Proficiencia;
   onFechar: () => void;
-  onConcluido?: (estrelas: number, tipo: string, referencia: string) => void;
+  onConcluido?: (
+    estrelas: number,
+    tipo: string,
+    referencia: string,
+    resultado: { melhor_score: number; acertos: number; total: number; dominado: boolean }
+  ) => void;
 }
 
 type Fase =
@@ -219,7 +224,12 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
       });
       const data = await res.json();
       setResultado(data);
-      onConcluido?.(data.estrelas, tipo, referencia);
+      onConcluido?.(data.estrelas, tipo, referencia, {
+        melhor_score: data.melhor_score ?? 0,
+        acertos: data.acertos ?? 0,
+        total: data.total ?? 0,
+        dominado: data.dominado ?? false,
+      });
     } catch {
       const acertos = questoes.filter((q, i) => respostas[i] === q.gabarito).length;
       setResultado({ acertos, total: questoes.length, estrelas: acertos });
