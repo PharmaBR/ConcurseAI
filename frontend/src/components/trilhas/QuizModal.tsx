@@ -106,6 +106,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
 
   // Seleção de nível
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoQuiz>("modulo");
+  const [regenerar, setRegerar] = useState(false);
   const [topicoSelecionado, setTopicoSelecionado] = useState<TopicoAninhado | null>(null);
   const [subtopico, setSubtopico] = useState("");
 
@@ -134,7 +135,6 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
     } else if (tipoSelecionado === "topico") {
       setFase("selecionando_item");
     } else {
-      // subtopico
       setFase("selecionando_item");
     }
   }
@@ -160,7 +160,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
       const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tipo, referencia, topico_nome }),
+        body: JSON.stringify({ tipo, referencia, topico_nome, ...(regenerar && { regenerar: true }) }),
       });
       const data = await res.json();
       if (!data.questoes?.length) throw new Error("Sem questões.");
@@ -233,6 +233,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
     setFase("selecionando_nivel");
     setTopicoSelecionado(null);
     setSubtopico("");
+    setRegerar(false);
   }
 
   const corAlternativa = (letra: string) => {
@@ -336,9 +337,22 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
                 ))}
               </div>
 
+              {/* Opção de regenerar */}
+              <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+                <input
+                  type="checkbox"
+                  checked={regenerar}
+                  onChange={(e) => setRegerar(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                />
+                <span className="text-xs text-gray-500">
+                  Gerar novas questões (ignora cache)
+                </span>
+              </label>
+
               <button
                 onClick={handleConfirmarNivel}
-                className="w-full mt-2 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="w-full mt-1 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Continuar →
               </button>
