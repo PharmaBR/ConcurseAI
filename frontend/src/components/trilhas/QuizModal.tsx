@@ -18,10 +18,25 @@ interface TopicoAninhado {
   subtopicos: string[];
 }
 
+interface ProficienciaEntry {
+  melhor_acertos: number;
+  total: number;
+  score: number;
+  dominado: boolean;
+  tentativas: number;
+}
+
+interface Proficiencia {
+  modulo: ProficienciaEntry | null;
+  topicos: Record<string, ProficienciaEntry>;
+  subtopicos: Record<string, ProficienciaEntry>;
+}
+
 interface Props {
   moduloId: number;
   moduloNome: string;
   topicos: string[] | TopicoAninhado[];
+  proficiencia?: Proficiencia;
   onFechar: () => void;
   onConcluido?: (estrelas: number, tipo: string, referencia: string) => void;
 }
@@ -69,7 +84,24 @@ function isNested(topicos: string[] | TopicoAninhado[]): topicos is TopicoAninha
   return topicos.length > 0 && typeof topicos[0] === "object";
 }
 
-export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido }: Props) {
+/** Badge inline de proficiência: score colorido ou "—" se sem tentativa. */
+function ProfBadge({ entry }: { entry: ProficienciaEntry | undefined }) {
+  if (!entry) return <span className="text-[10px] text-gray-300 font-mono">—</span>;
+  const pct = Math.round(entry.score * 100);
+  const color = entry.dominado
+    ? "text-green-600 bg-green-50 border-green-200"
+    : entry.score >= 0.5
+    ? "text-yellow-600 bg-yellow-50 border-yellow-200"
+    : "text-red-500 bg-red-50 border-red-200";
+  return (
+    <span className={`text-[10px] font-medium border rounded px-1 py-0.5 ${color}`}>
+      {entry.dominado ? "✓ " : ""}{pct}%
+    </span>
+  );
+}
+
+export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFechar, onConcluido }: Props) {
+  const prof = proficiencia ?? { modulo: null, topicos: {}, subtopicos: {} };
   const nested = isNested(topicos);
 
   // Seleção de nível
@@ -262,6 +294,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                     desc: "5 questões focadas em 1 subtópico — diagnóstico granular",
                     icon: "🔬",
                     disabled: !nested,
+                    profEntry: undefined as ProficienciaEntry | undefined,
                   },
                   {
                     id: "topico" as TipoQuiz,
@@ -269,6 +302,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                     desc: "5 questões integrando os subtópicos de 1 tópico",
                     icon: "📖",
                     disabled: !nested,
+                    profEntry: undefined as ProficienciaEntry | undefined,
                   },
                   {
                     id: "modulo" as TipoQuiz,
@@ -276,6 +310,7 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                     desc: "5 questões interdisciplinares cruzando todos os tópicos",
                     icon: "🎯",
                     disabled: false,
+                    profEntry: prof.modulo ?? undefined,
                   },
                 ].map((op) => (
                   <button
@@ -290,9 +325,12 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                         : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                     }`}
                   >
-                    <span className="font-medium text-sm text-gray-800">
-                      {op.icon} {op.label}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm text-gray-800">
+                        {op.icon} {op.label}
+                      </span>
+                      <ProfBadge entry={op.profEntry} />
+                    </div>
                     <p className="text-xs text-gray-400 mt-0.5">{op.desc}</p>
                   </button>
                 ))}
@@ -324,10 +362,15 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                               : "border-gray-200 hover:border-gray-300 text-gray-700"
                           }`}
                         >
-                          {t.nome}
-                          <span className="text-xs text-gray-400 ml-2">
-                            ({t.subtopicos.length} subtópicos)
-                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{t.nome}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-400">
+                                {t.subtopicos.length} subtópicos
+                              </span>
+                              <ProfBadge entry={prof.topicos[t.nome]} />
+                            </div>
+                          </div>
                         </button>
                       </li>
                     ))}
@@ -346,7 +389,10 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                               onClick={() => setTopicoSelecionado(t)}
                               className="w-full text-left border rounded-lg px-3 py-2.5 text-sm border-gray-200 hover:border-gray-300 text-gray-700 transition-colors"
                             >
-                              {t.nome}
+                              <div className="flex items-center justify-between gap-2">
+                                <span>{t.nome}</span>
+                                <ProfBadge entry={prof.topicos[t.nome]} />
+                              </div>
                             </button>
                           </li>
                         ))}
@@ -372,7 +418,10 @@ export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido
                                   : "border-gray-200 hover:border-gray-300 text-gray-700"
                               }`}
                             >
-                              {sub}
+                              <div className="flex items-center justify-between gap-2">
+                                <span>{sub}</span>
+                                <ProfBadge entry={prof.subtopicos[sub]} />
+                              </div>
                             </button>
                           </li>
                         ))}

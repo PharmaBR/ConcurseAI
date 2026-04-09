@@ -333,6 +333,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           moduloId={modulo.id}
           moduloNome={modulo.nome}
           topicos={modulo.topicos}
+          proficiencia={proficiencia}
           onFechar={() => setQuizAberto(false)}
           onConcluido={handleQuizConcluido}
         />
