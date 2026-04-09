@@ -24,8 +24,11 @@ interface Lacuna {
 interface Props {
   moduloId: number;
   moduloNome: string;
-  /** Se fornecido, gera lacunas a partir desta tentativa antes de mostrar o deck */
+  /** Gera lacunas a partir de uma tentativa específica */
   tentativaId?: number;
+  /** Gera lacunas a partir da tentativa mais recente deste nível (alternativa ao tentativaId) */
+  tipo?: string;
+  referencia?: string;
   onFechar: () => void;
   onDominioAtualizado?: (pendentes: number) => void;
 }
@@ -36,6 +39,8 @@ export function FlashcardDeck({
   moduloId,
   moduloNome,
   tentativaId,
+  tipo,
+  referencia,
   onFechar,
   onDominioAtualizado,
 }: Props) {
@@ -55,14 +60,21 @@ export function FlashcardDeck({
 
     async function carregar() {
       try {
-        // Se vier tentativaId, gera as lacunas desta tentativa primeiro
-        if (tentativaId) {
+        // Gera lacunas: via tentativaId específico, via tipo+referencia, ou nenhum (só lista)
+        if (tentativaId || tipo !== undefined) {
+          const body = tentativaId
+            ? { tentativa_id: tentativaId }
+            : { tipo: tipo ?? "modulo", referencia: referencia ?? "" };
+
           const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/lacunas/`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ tentativa_id: tentativaId }),
+            body: JSON.stringify(body),
           });
-          if (!res.ok) throw new Error("Erro ao gerar lacunas.");
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || "Erro ao gerar lacunas.");
+          }
         }
 
         // Busca todas as lacunas (incluindo tentativas anteriores) com flashcards pendentes
@@ -193,7 +205,9 @@ export function FlashcardDeck({
             <div className="flex flex-col items-center gap-3 py-10 text-gray-400">
               <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
               <p className="text-sm">
-                {tentativaId ? "Analisando seus erros com IA…" : "Carregando flashcards…"}
+                {tentativaId || tipo !== undefined
+                  ? "Analisando seus erros com IA…"
+                  : "Carregando flashcards…"}
               </p>
             </div>
           )}

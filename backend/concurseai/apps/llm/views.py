@@ -292,24 +292,50 @@ def salvar_tentativa_view(request, modulo_id):
 def gerar_lacunas_view(request, modulo_id):
     """
     POST /api/llm/quiz/<modulo_id>/lacunas/
-    Body: {"tentativa_id": int}
+    Body (opção 1): {"tentativa_id": int}
+          — usa uma tentativa específica.
+    Body (opção 2): {"tipo": "subtopico"|"topico"|"modulo", "referencia": "..."}
+          — busca automaticamente a tentativa mais recente para esse nível.
 
-    Analisa as questões erradas da tentativa via LLM, cria LacunaConceitual e
-    Flashcard para cada erro. Idempotente: não duplica lacunas já existentes.
+    Analisa questões erradas, cria LacunaConceitual + Flashcard. Idempotente.
     """
     tentativa_id = request.data.get("tentativa_id")
-    if not tentativa_id:
-        return Response({"detail": "O campo 'tentativa_id' é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+    tipo = request.data.get("tipo", "modulo")
+    referencia = (request.data.get("referencia") or "").strip()
 
     try:
         modulo = Modulo.objects.select_related("trilha__usuario").get(
             id=modulo_id, trilha__usuario=request.user
         )
-        tentativa = QuizTentativa.objects.select_related("quiz__modulo").get(
-            id=tentativa_id, usuario=request.user, quiz__modulo=modulo
+    except Modulo.DoesNotExist:
+        return Response({"detail": "Módulo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    if tentativa_id:
+        try:
+            tentativa = QuizTentativa.objects.select_related("quiz__modulo").get(
+                id=tentativa_id, usuario=request.user, quiz__modulo=modulo
+            )
+        except QuizTentativa.DoesNotExist:
+            return Response({"detail": "Tentativa não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        # Busca a tentativa mais recente para o nível solicitado
+        tentativa = (
+            QuizTentativa.objects
+            .select_related("quiz__modulo")
+            .filter(
+                usuario=request.user,
+                quiz__modulo=modulo,
+                quiz__tipo=tipo,
+                quiz__referencia=referencia,
+            )
+            .order_by("-criado_em")
+            .first()
         )
-    except (Modulo.DoesNotExist, QuizTentativa.DoesNotExist):
-        return Response({"detail": "Tentativa não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        if not tentativa:
+            return Response(
+                {"detail": "Nenhuma tentativa encontrada para este nível. Faça o quiz primeiro."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
     try:
         data = async_to_sync(analisar_lacunas_e_gerar_flashcards)(tentativa, modulo.nome)

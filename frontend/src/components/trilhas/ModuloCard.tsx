@@ -332,17 +332,22 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           📝 {quizEstrelas !== null ? "Refazer quiz" : "Fazer quiz"}
         </button>
 
-        {/* Botão de flashcards — só aparece quando há pendentes */}
-        {flashcardsPendentes > 0 && (
+        {/* Botão de flashcards — aparece sempre que houve quiz (proficiência existe) */}
+        {(proficiencia.modulo !== null ||
+          Object.keys(proficiencia.topicos).length > 0 ||
+          Object.keys(proficiencia.subtopicos).length > 0 ||
+          flashcardsPendentes > 0) && (
           <button
             type="button"
             onClick={() => setFlashcardAberto(true)}
             className="text-xs text-orange-600 hover:text-orange-800 transition-colors flex items-center gap-1"
           >
             📚
-            <span className="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
-              {flashcardsPendentes}
-            </span>
+            {flashcardsPendentes > 0 && (
+              <span className="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {flashcardsPendentes}
+              </span>
+            )}
             Flashcards
           </button>
         )}
@@ -379,6 +384,8 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         <FlashcardDeck
           moduloId={modulo.id}
           moduloNome={modulo.nome}
+          tipo="modulo"
+          referencia=""
           onFechar={() => setFlashcardAberto(false)}
           onDominioAtualizado={(pendentes) => setFlashcardsPendentes(pendentes)}
         />
