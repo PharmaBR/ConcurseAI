@@ -83,17 +83,33 @@ Texto do edital:
 Gere a trilha de estudos com scaffolding pedagógico para este concurso."""
 
 
-# TODO FASE 2: system_explicar_conteudo(disciplina, subtopico) — para chat streaming
-# def system_explicar_conteudo(disciplina: str, subtopico: str) -> str:
-#     """Instrui a LLM a explicar um subtópico específico de forma didática."""
-#     ...
+def system_explicar_conteudo(modulo_nome: str) -> str:
+    """
+    Instrui a LLM a atuar como professor de concursos para um módulo específico.
+    Respostas em texto livre (sem JSON) — usada com stream_chat().
+    """
+    return (
+        f"Você é um professor especializado em concursos públicos brasileiros, "
+        f"com foco em {modulo_nome}. "
+        "Explique os conteúdos de forma didática, clara e objetiva, "
+        "adaptada para candidatos em preparação para concursos. "
+        "Use exemplos práticos e situações reais quando relevante. "
+        "Seja direto e conciso. Responda sempre em português brasileiro."
+    )
+
+
+def user_explicar_conteudo(pergunta: str, modulo_nome: str, topico_nome: str = "") -> str:
+    """Formata a pergunta do candidato com o contexto do módulo/tópico."""
+    contexto = f"Estou estudando {modulo_nome}"
+    if topico_nome:
+        contexto += f", especificamente: {topico_nome}"
+    return f"{contexto}.\n\nMinha dúvida: {pergunta}"
+
 
 # TODO FASE 2: system_analisar_compatibilidade() — para matching candidato × edital
 # def system_analisar_compatibilidade() -> str:
-#     """Instrui a LLM a comparar o perfil do candidato com os requisitos do edital."""
 #     ...
 
 # TODO FASE 2: system_gerar_quiz(modulo, subtopico) — quiz granular por subtópico
 # def system_gerar_quiz(modulo: str, subtopico: str) -> str:
-#     """Instrui a LLM a gerar questões no estilo da banca para um subtópico específico."""
 #     ...

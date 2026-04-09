@@ -52,26 +52,33 @@ async def complete(system_prompt: str, user_message: str, model: str | None = No
     return content
 
 
-# TODO FASE 2: stream_chat() — streaming SSE para chat de explicação
-# async def stream_chat(
-#     system_prompt: str,
-#     user_message: str,
-#     model: str | None = None,
-# ) -> AsyncIterator[str]:
-#     """Retorna um gerador assíncrono de tokens para uso com StreamingHttpResponse."""
-#     resolved_model = model or settings.OPENAI_MODEL
-#     client = get_client()
-#     async with client.chat.completions.stream(
-#         model=resolved_model,
-#         messages=[
-#             {"role": "system", "content": system_prompt},
-#             {"role": "user", "content": user_message},
-#         ],
-#     ) as stream:
-#         async for chunk in stream:
-#             token = chunk.choices[0].delta.content
-#             if token:
-#                 yield token
+async def stream_chat(system_prompt: str, user_message: str, model: str | None = None):
+    """
+    Gerador assíncrono de tokens para uso com StreamingHttpResponse (SSE).
+    Ao contrário de complete(), não usa response_format=json_object — retorna texto livre.
+    """
+    resolved_model = model or settings.OPENAI_MODEL
+    client = get_client()
+
+    logger.info(
+        "LLM stream request | model=%s | system_len=%d | user_len=%d",
+        resolved_model,
+        len(system_prompt),
+        len(user_message),
+    )
+
+    stream = await client.chat.completions.create(
+        model=resolved_model,
+        stream=True,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+    )
+    async for chunk in stream:
+        token = chunk.choices[0].delta.content if chunk.choices else None
+        if token:
+            yield token
 
 # TODO FASE 3: integração Thesys C1
 # Substituir stream_chat por chamada ao endpoint C1 da Thesys

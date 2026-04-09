@@ -1,9 +1,9 @@
 "use client";
 
-// TODO FASE 2: botão "Perguntar sobre este módulo" abre chat streaming
 // TODO FASE 3: ModuloCard usa GenerativeUI para feedback em tempo real
 
 import { useState } from "react";
+import { ChatExplicacao } from "./ChatExplicacao";
 
 interface TopicoAninhado {
   nome: string;
@@ -61,10 +61,10 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
     : [];
 
   const [checked, setChecked] = useState<boolean[]>(initialChecked);
-  // Track which topics are expanded (nested mode)
   const [expanded, setExpanded] = useState<boolean[]>(() =>
     nested ? (modulo.topicos as TopicoAninhado[]).map(() => true) : []
   );
+  const [chatAberto, setChatAberto] = useState(false);
 
   async function handleToggle(index: number) {
     const next = checked.map((v, i) => (i === index ? !v : v));
@@ -190,6 +190,17 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           ))}
         </ul>
       )}
+
+      {/* Botão para abrir/fechar chat de dúvidas */}
+      <button
+        type="button"
+        onClick={() => setChatAberto((v) => !v)}
+        className="self-start text-xs text-blue-600 hover:text-blue-800 transition-colors mt-1"
+      >
+        {chatAberto ? "▲ Fechar chat" : "💬 Perguntar à IA sobre este módulo"}
+      </button>
+
+      {chatAberto && <ChatExplicacao moduloNome={modulo.nome} />}
     </div>
   );
 }

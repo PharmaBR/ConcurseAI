@@ -60,18 +60,20 @@ async def gerar_trilha_para_concurso(concurso) -> dict:
     return data
 
 
-# TODO FASE 2: stream_explicacao(usuario, pergunta, disciplina) -> AsyncIterator[str]
-#   - verifica usuario.tem_credito_llm → SemCreditoError
-#   - debita com aupdate (F expression, async-safe)
-#   - chama client.stream_chat e faz yield dos tokens
-#
-# async def stream_explicacao(usuario, pergunta: str, disciplina: str):
-#     if not usuario.tem_credito_llm:
-#         raise SemCreditoError("Você não possui créditos para usar esta funcionalidade.")
-#     from django.db.models import F
-#     from concurseai.apps.users.models import User
-#     if usuario.plano == User.Plano.GRATUITO:
-#         await User.objects.filter(pk=usuario.pk).aupdate(creditos_llm=F("creditos_llm") - 1)
-#     system_prompt = prompts.system_explicar_conteudo(disciplina)
-#     async for token in client.stream_chat(system_prompt, pergunta):
-#         yield token
+async def stream_explicacao(usuario, pergunta: str, modulo_nome: str, topico_nome: str = ""):
+    """
+    Gerador assíncrono de tokens para o chat de explicação por módulo.
+    Faz yield de cada token recebido da LLM para uso com StreamingHttpResponse (SSE).
+
+    # TODO FASE 2: adicionar verificação e débito de créditos quando o modelo de
+    # planos for implementado (usuario.tem_credito_llm, F expression async-safe).
+    """
+    system_prompt = prompts.system_explicar_conteudo(modulo_nome)
+    user_message = prompts.user_explicar_conteudo(pergunta, modulo_nome, topico_nome)
+
+    try:
+        async for token in client.stream_chat(system_prompt, user_message):
+            yield token
+    except Exception as exc:
+        logger.exception("Erro no stream LLM para usuário %s", usuario.id)
+        raise LLMServiceError(f"Falha na comunicação com a LLM: {exc}") from exc
