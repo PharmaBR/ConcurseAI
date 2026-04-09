@@ -40,8 +40,37 @@ class Trilha(models.Model):
         return round((concluidos / total) * 100, 1)
 
 
+class QuizGerado(models.Model):
+    """
+    Quiz de múltipla escolha gerado pela LLM para um módulo específico.
+    Cada módulo pode ter no máximo um quiz (unique on modulo).
+    Estrutura de 'questoes':
+    [
+      {
+        "enunciado": "...",
+        "alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."},
+        "gabarito": "A",
+        "explicacao": "..."
+      }
+    ]
+    """
+    modulo = models.OneToOneField(
+        "Modulo",
+        on_delete=models.CASCADE,
+        related_name="quiz",
+    )
+    questoes = models.JSONField(default=list)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "quiz gerado"
+        verbose_name_plural = "quizzes gerados"
+
+    def __str__(self):
+        return f"Quiz — {self.modulo}"
+
+
 class Modulo(models.Model):
-    # TODO FASE 2: FK para QuizGerado — quando app quiz for implementado
 
     class Status(models.TextChoices):
         NAO_INICIADO = "nao_iniciado", "Não iniciado"

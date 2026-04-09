@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { ChatExplicacao } from "./ChatExplicacao";
+import { QuizModal } from "./QuizModal";
 
 interface TopicoAninhado {
   nome: string;
@@ -65,6 +66,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
     nested ? (modulo.topicos as TopicoAninhado[]).map(() => true) : []
   );
   const [chatAberto, setChatAberto] = useState(false);
+  const [quizAberto, setQuizAberto] = useState(false);
 
   async function handleToggle(index: number) {
     const next = checked.map((v, i) => (i === index ? !v : v));
@@ -191,16 +193,33 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         </ul>
       )}
 
-      {/* Botão para abrir/fechar chat de dúvidas */}
-      <button
-        type="button"
-        onClick={() => setChatAberto((v) => !v)}
-        className="self-start text-xs text-blue-600 hover:text-blue-800 transition-colors mt-1"
-      >
-        {chatAberto ? "▲ Fechar chat" : "💬 Perguntar à IA sobre este módulo"}
-      </button>
+      {/* Ações IA */}
+      <div className="flex gap-3 mt-1">
+        <button
+          type="button"
+          onClick={() => setChatAberto((v) => !v)}
+          className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          {chatAberto ? "▲ Fechar chat" : "💬 Perguntar à IA"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuizAberto(true)}
+          className="text-xs text-purple-600 hover:text-purple-800 transition-colors"
+        >
+          📝 Fazer quiz
+        </button>
+      </div>
 
       {chatAberto && <ChatExplicacao moduloNome={modulo.nome} />}
+
+      {quizAberto && (
+        <QuizModal
+          moduloId={modulo.id}
+          moduloNome={modulo.nome}
+          onFechar={() => setQuizAberto(false)}
+        />
+      )}
     </div>
   );
 }

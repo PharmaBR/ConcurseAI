@@ -106,6 +106,49 @@ def user_explicar_conteudo(pergunta: str, modulo_nome: str, topico_nome: str = "
     return f"{contexto}.\n\nMinha dúvida: {pergunta}"
 
 
+def system_gerar_quiz(modulo_nome: str, banca: str = "") -> str:
+    """
+    Instrui a LLM a gerar questões de múltipla escolha no estilo da banca.
+    Retorna JSON — usado com client.complete() (response_format=json_object).
+    """
+    banca_instrucao = ""
+    if banca:
+        banca_instrucao = (
+            f"\nAdapte o estilo das questões à banca {banca}: "
+            "CESPE/CEBRASPE usa certo/errado e afirmações com pegadinhas; "
+            "FGV e FCC usam 4-5 alternativas com situações-problema."
+        )
+
+    return (
+        f"Você é um elaborador de questões de concursos públicos especializado em {modulo_nome}."
+        f"{banca_instrucao}\n\n"
+        "Gere exatamente 5 questões de múltipla escolha (A, B, C, D) com base nos tópicos fornecidos.\n\n"
+        "REGRAS OBRIGATÓRIAS:\n"
+        "1. Retorne APENAS JSON válido, sem texto extra.\n"
+        '2. Estrutura raiz: {"questoes": [...]}\n'
+        "3. Cada questão: "
+        '{"enunciado": string, "alternativas": {"A": string, "B": string, "C": string, "D": string}, '
+        '"gabarito": "A"|"B"|"C"|"D", "explicacao": string}\n'
+        "4. O enunciado deve ser claro e testar uma competência específica.\n"
+        "5. Apenas uma alternativa correta; as outras devem ser plausíveis (não óbvias).\n"
+        "6. A explicação deve justificar o gabarito e mencionar por que as outras estão erradas.\n"
+        "7. Varie a posição do gabarito entre A, B, C e D.\n"
+        "8. Nível de dificuldade: intermediário a avançado."
+    )
+
+
+def user_gerar_quiz(modulo_nome: str, topicos: list) -> str:
+    """Formata os tópicos do módulo para geração do quiz."""
+    topicos_texto = "\n".join(
+        f"- {t['nome'] if isinstance(t, dict) else t}" for t in topicos[:10]
+    )
+    return (
+        f"Módulo: {modulo_nome}\n\n"
+        f"Tópicos a cobrir:\n{topicos_texto}\n\n"
+        "Gere 5 questões de múltipla escolha cobrindo esses tópicos."
+    )
+
+
 # TODO FASE 2: system_analisar_compatibilidade() — para matching candidato × edital
 # def system_analisar_compatibilidade() -> str:
 #     ...

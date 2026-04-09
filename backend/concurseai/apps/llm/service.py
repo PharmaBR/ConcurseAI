@@ -60,6 +60,39 @@ async def gerar_trilha_para_concurso(concurso) -> dict:
     return data
 
 
+async def gerar_quiz_para_modulo(modulo, banca: str = "") -> dict:
+    """
+    Gera 5 questões de múltipla escolha para um módulo via LLM.
+
+    Retorna dict com {"questoes": [...]} — NÃO persiste (responsabilidade da view).
+    Raises LLMServiceError se a resposta for inválida.
+    """
+    if not modulo.topicos:
+        raise LLMServiceError(
+            f"Módulo '{modulo.nome}' não possui tópicos para gerar quiz."
+        )
+
+    system_prompt = prompts.system_gerar_quiz(modulo.nome, banca=banca)
+    user_message = prompts.user_gerar_quiz(modulo.nome, modulo.topicos)
+
+    try:
+        raw = await client.complete(system_prompt, user_message)
+    except Exception as exc:
+        logger.exception("Erro na chamada LLM para quiz do módulo %s", modulo.id)
+        raise LLMServiceError(f"Falha na comunicação com a LLM: {exc}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.error("JSON inválido retornado pela LLM (quiz): %s", raw[:200])
+        raise LLMServiceError("A LLM retornou uma resposta em formato inválido.") from exc
+
+    if "questoes" not in data or not isinstance(data["questoes"], list):
+        raise LLMServiceError("Resposta da LLM não contém o campo 'questoes' esperado.")
+
+    return data
+
+
 async def stream_explicacao(usuario, pergunta: str, modulo_nome: str, topico_nome: str = ""):
     """
     Gerador assíncrono de tokens para o chat de explicação por módulo.

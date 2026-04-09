@@ -20,10 +20,16 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from concurseai.apps.concursos.models import Concurso
-from concurseai.apps.trilhas.models import Modulo, Trilha
+from concurseai.apps.trilhas.models import Modulo, QuizGerado, Trilha
 from concurseai.apps.users.models import User
 
-from .service import LLMServiceError, SemCreditoError, gerar_trilha_para_concurso, stream_explicacao
+from .service import (
+    LLMServiceError,
+    SemCreditoError,
+    gerar_quiz_para_modulo,
+    gerar_trilha_para_concurso,
+    stream_explicacao,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,3 +147,40 @@ async def explicar_stream_view(request):
     response["X-Accel-Buffering"] = "no"
     response["Cache-Control"] = "no-cache"
     return response
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def gerar_quiz_view(request, modulo_id):
+    """
+    POST /api/llm/quiz/<modulo_id>/
+    Gera (ou retorna existente) quiz de 5 questões para o módulo via LLM.
+    Persiste em QuizGerado (OneToOne com Modulo).
+    """
+    try:
+        modulo = Modulo.objects.select_related(
+            "trilha__usuario", "trilha__concurso__banca"
+        ).get(id=modulo_id, trilha__usuario=request.user)
+    except Modulo.DoesNotExist:
+        return Response({"detail": "Módulo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Retorna quiz existente sem chamar a LLM novamente
+    quiz_existente = QuizGerado.objects.filter(modulo=modulo).first()
+    if quiz_existente:
+        return Response({"questoes": quiz_existente.questoes}, status=status.HTTP_200_OK)
+
+    banca = modulo.trilha.concurso.banca.nome if modulo.trilha.concurso.banca else ""
+
+    try:
+        data = async_to_sync(gerar_quiz_para_modulo)(modulo, banca=banca)
+    except LLMServiceError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    quiz, created = QuizGerado.objects.update_or_create(
+        modulo=modulo,
+        defaults={"questoes": data["questoes"]},
+    )
+    return Response(
+        {"questoes": quiz.questoes},
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
