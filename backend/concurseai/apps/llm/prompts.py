@@ -234,4 +234,59 @@ def user_gerar_quiz_modulo(modulo_nome: str, topicos: list) -> str:
     )
 
 
+def system_analisar_lacunas(modulo_nome: str) -> str:
+    """
+    Instrui a LLM a analisar questões erradas e identificar o conceito-chave
+    mal compreendido em cada uma, gerando ao mesmo tempo o flashcard de fixação.
+    Uma única chamada por tentativa — retorna lacunas + flashcards em JSON.
+    """
+    return (
+        f"Você é um pedagogo especialista em concursos públicos, com foco em {modulo_nome}.\n\n"
+        "Sua tarefa é analisar questões que um candidato ERROU num quiz e:\n"
+        "1. Identificar o CONCEITO-CHAVE que o candidato provavelmente não compreendeu.\n"
+        "2. Criar um FLASHCARD de fixação para esse conceito.\n\n"
+        "REGRAS OBRIGATÓRIAS:\n"
+        "1. Retorne APENAS JSON válido, sem texto extra.\n"
+        '2. Estrutura raiz: {"lacunas": [...]}\n'
+        "3. Cada lacuna:\n"
+        '   {"numero_questao": int,\n'
+        '    "subtopico_ref": "nome exato do subtópico ao qual o conceito pertence",\n'
+        '    "conceito": "nome curto e preciso do conceito (máx 80 chars)",\n'
+        '    "flashcard_frente": "pergunta direta que testa o conceito (1-2 frases)",\n'
+        '    "flashcard_verso": "resposta clara e completa — explica o conceito correto, '
+        'menciona a pegadinha/exceção e por que o distrator é errado (3-6 frases)"}\n'
+        "4. Use 'subtopico_ref' que corresponda ao subtópico listado na questão ou ao mais próximo.\n"
+        "5. O flashcard_verso deve ser didático — serve para o candidato APRENDER, não só verificar.\n"
+        "6. Foque no GAP conceitual: o que o candidato precisaria saber para acertar essa questão?\n"
+        "7. Gere UMA lacuna por questão errada — não agrupe nem divida."
+    )
+
+
+def user_analisar_lacunas(questoes_erradas: list, modulo_nome: str, quiz_referencia: str = "") -> str:
+    """Formata as questões erradas para análise de lacunas."""
+    ctx = f"Módulo: {modulo_nome}"
+    if quiz_referencia:
+        ctx += f"\nContexto do quiz: {quiz_referencia}"
+
+    linhas = [ctx, "", f"O candidato errou {len(questoes_erradas)} questão(ões):", ""]
+    for q in questoes_erradas:
+        linhas += [
+            f"--- Questão {q['numero'] + 1} (índice {q['numero']}) ---",
+            f"Enunciado: {q['enunciado']}",
+            "Alternativas:",
+        ]
+        for letra, texto in q.get("alternativas", {}).items():
+            linhas.append(f"  {letra}) {texto}")
+        linhas += [
+            f"Resposta do candidato: {q['resposta_usuario'] or '(não respondeu)'}",
+            f"Gabarito correto: {q['gabarito']}",
+            f"Explicação: {q['explicacao']}",
+            f"Nível: {q.get('nivel', '')} | Dificuldade: {q.get('dificuldade', '')}",
+            "",
+        ]
+
+    linhas.append("Analise cada erro e gere a lacuna + flashcard correspondente.")
+    return "\n".join(linhas)
+
+
 # TODO FASE 2: system_analisar_compatibilidade() — para matching candidato × edital

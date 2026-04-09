@@ -125,6 +125,57 @@ async def gerar_quiz_para_modulo(
     return data
 
 
+async def analisar_lacunas_e_gerar_flashcards(tentativa, modulo_nome: str) -> dict:
+    """
+    Analisa as questões erradas de uma QuizTentativa, identifica os conceitos-chave
+    mal compreendidos e gera flashcards de fixação em uma única chamada LLM.
+
+    Retorna dict com {"lacunas": [...]} — NÃO persiste (responsabilidade da view).
+    Raises LLMServiceError se não houver erros ou se a resposta for inválida.
+    """
+    questoes_erradas = []
+    for i, questao in enumerate(tentativa.quiz.questoes):
+        resposta_usuario = tentativa.respostas.get(str(i))
+        gabarito = questao.get("gabarito")
+        if resposta_usuario != gabarito:
+            questoes_erradas.append({
+                "numero": i,
+                "enunciado": questao.get("enunciado", ""),
+                "alternativas": questao.get("alternativas", {}),
+                "resposta_usuario": resposta_usuario,
+                "gabarito": gabarito,
+                "explicacao": questao.get("explicacao", ""),
+                "nivel": questao.get("nivel", ""),
+                "dificuldade": questao.get("dificuldade", ""),
+            })
+
+    if not questoes_erradas:
+        return {"lacunas": []}
+
+    # Contexto do quiz (subtópico/tópico avaliado, se houver)
+    quiz_referencia = tentativa.quiz.referencia or ""
+
+    system_prompt = prompts.system_analisar_lacunas(modulo_nome)
+    user_message = prompts.user_analisar_lacunas(questoes_erradas, modulo_nome, quiz_referencia)
+
+    try:
+        raw = await client.complete(system_prompt, user_message)
+    except Exception as exc:
+        logger.exception("Erro na análise de lacunas para tentativa %s", tentativa.id)
+        raise LLMServiceError(f"Falha na comunicação com a LLM: {exc}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.error("JSON inválido retornado pela LLM (lacunas): %s", raw[:200])
+        raise LLMServiceError("A LLM retornou uma resposta em formato inválido.") from exc
+
+    if "lacunas" not in data or not isinstance(data["lacunas"], list):
+        raise LLMServiceError("Resposta da LLM não contém o campo 'lacunas' esperado.")
+
+    return data
+
+
 async def stream_explicacao(usuario, pergunta: str, modulo_nome: str, topico_nome: str = ""):
     """
     Gerador assíncrono de tokens para o chat de explicação por módulo.

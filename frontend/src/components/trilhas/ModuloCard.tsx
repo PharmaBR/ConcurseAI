@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { ChatExplicacao } from "./ChatExplicacao";
+import { FlashcardDeck } from "./FlashcardDeck";
 import { QuizModal } from "./QuizModal";
 
 interface TopicoAninhado {
@@ -35,6 +36,7 @@ interface Modulo {
   topicos: string[] | TopicoAninhado[];
   quiz_estrelas?: number | null;
   proficiencia?: Proficiencia | null;
+  flashcards_pendentes?: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -132,6 +134,10 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
   );
   const [chatAberto, setChatAberto] = useState(false);
   const [quizAberto, setQuizAberto] = useState(false);
+  const [flashcardAberto, setFlashcardAberto] = useState(false);
+  const [flashcardsPendentes, setFlashcardsPendentes] = useState(
+    modulo.flashcards_pendentes ?? 0
+  );
 
   // Proficiência: estado derivado da API, atualizável após quiz
   const [proficiencia, setProficiencia] = useState<Proficiencia>(
@@ -311,6 +317,21 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           📝 {quizEstrelas !== null ? "Refazer quiz" : "Fazer quiz"}
         </button>
 
+        {/* Botão de flashcards — só aparece quando há pendentes */}
+        {flashcardsPendentes > 0 && (
+          <button
+            type="button"
+            onClick={() => setFlashcardAberto(true)}
+            className="text-xs text-orange-600 hover:text-orange-800 transition-colors flex items-center gap-1"
+          >
+            📚
+            <span className="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+              {flashcardsPendentes}
+            </span>
+            Flashcards
+          </button>
+        )}
+
         {/* Badge de estrelas do quiz de módulo */}
         {quizEstrelas !== null && (
           <span className="flex items-center gap-0.5 ml-auto">
@@ -336,6 +357,15 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           proficiencia={proficiencia}
           onFechar={() => setQuizAberto(false)}
           onConcluido={handleQuizConcluido}
+        />
+      )}
+
+      {flashcardAberto && (
+        <FlashcardDeck
+          moduloId={modulo.id}
+          moduloNome={modulo.nome}
+          onFechar={() => setFlashcardAberto(false)}
+          onDominioAtualizado={(pendentes) => setFlashcardsPendentes(pendentes)}
         />
       )}
     </div>

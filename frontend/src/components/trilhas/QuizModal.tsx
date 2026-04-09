@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FlashcardDeck } from "./FlashcardDeck";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -120,9 +121,11 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
     acertos: number;
     total: number;
     estrelas: number;
+    tentativa_id?: number;
     melhor_score?: number;
     dominado?: boolean;
   } | null>(null);
+  const [flashcardAberto, setFlashcardAberto] = useState(false);
   const [erro, setErro] = useState("");
 
   // ──────────────────────────────────────────────
@@ -569,7 +572,17 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
                 ))}
               </div>
 
-              <div className="flex gap-2 w-full pt-2">
+              {/* Botão de flashcards — aparece só quando há erros */}
+              {resultado.acertos < resultado.total && (
+                <button
+                  onClick={() => setFlashcardAberto(true)}
+                  className="w-full text-sm bg-purple-600 text-white py-2.5 rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  📚 Fixar conceitos dos erros com flashcards
+                </button>
+              )}
+
+              <div className="flex gap-2 w-full">
                 <button
                   onClick={reiniciar}
                   className="flex-1 text-sm border border-blue-600 text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
@@ -586,6 +599,16 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
             </div>
           )}
         </div>
+
+        {/* FlashcardDeck — sobrepõe o QuizModal */}
+        {flashcardAberto && resultado && (
+          <FlashcardDeck
+            moduloId={moduloId}
+            moduloNome={moduloNome}
+            tentativaId={resultado.tentativa_id}
+            onFechar={() => setFlashcardAberto(false)}
+          />
+        )}
 
         {/* Footer — Próxima / Ver resultado */}
         {fase === "quiz" && respondida && (

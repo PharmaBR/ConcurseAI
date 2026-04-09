@@ -20,12 +20,13 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from concurseai.apps.concursos.models import Concurso
-from concurseai.apps.trilhas.models import Modulo, Proficiencia, QuizGerado, QuizTentativa, Trilha
+from concurseai.apps.trilhas.models import Flashcard, LacunaConceitual, Modulo, Proficiencia, QuizGerado, QuizTentativa, Trilha
 from concurseai.apps.users.models import User
 
 from .service import (
     LLMServiceError,
     SemCreditoError,
+    analisar_lacunas_e_gerar_flashcards,
     gerar_quiz_para_modulo,
     gerar_trilha_para_concurso,
     stream_explicacao,
@@ -278,8 +279,155 @@ def salvar_tentativa_view(request, modulo_id):
             "acertos": acertos,
             "total": total,
             "estrelas": tentativa.estrelas,
+            "tentativa_id": tentativa.id,
             "melhor_score": prof.melhor_score,
             "dominado": prof.dominado,
         },
         status=status.HTTP_201_CREATED,
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def gerar_lacunas_view(request, modulo_id):
+    """
+    POST /api/llm/quiz/<modulo_id>/lacunas/
+    Body: {"tentativa_id": int}
+
+    Analisa as questões erradas da tentativa via LLM, cria LacunaConceitual e
+    Flashcard para cada erro. Idempotente: não duplica lacunas já existentes.
+    """
+    tentativa_id = request.data.get("tentativa_id")
+    if not tentativa_id:
+        return Response({"detail": "O campo 'tentativa_id' é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        modulo = Modulo.objects.select_related("trilha__usuario").get(
+            id=modulo_id, trilha__usuario=request.user
+        )
+        tentativa = QuizTentativa.objects.select_related("quiz__modulo").get(
+            id=tentativa_id, usuario=request.user, quiz__modulo=modulo
+        )
+    except (Modulo.DoesNotExist, QuizTentativa.DoesNotExist):
+        return Response({"detail": "Tentativa não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        data = async_to_sync(analisar_lacunas_e_gerar_flashcards)(tentativa, modulo.nome)
+    except LLMServiceError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    lacunas_resultado = []
+    for item in data.get("lacunas", []):
+        lacuna, _ = LacunaConceitual.objects.get_or_create(
+            tentativa=tentativa,
+            numero_questao=item.get("numero_questao", 0),
+            defaults={
+                "usuario": request.user,
+                "subtopico_ref": item.get("subtopico_ref", ""),
+                "conceito": item.get("conceito", ""),
+            },
+        )
+        flashcard, _ = Flashcard.objects.get_or_create(
+            lacuna=lacuna,
+            defaults={
+                "frente": item.get("flashcard_frente", ""),
+                "verso": item.get("flashcard_verso", ""),
+            },
+        )
+        lacunas_resultado.append({
+            "id": lacuna.id,
+            "numero_questao": lacuna.numero_questao,
+            "subtopico_ref": lacuna.subtopico_ref,
+            "conceito": lacuna.conceito,
+            "flashcard": {
+                "id": flashcard.id,
+                "frente": flashcard.frente,
+                "verso": flashcard.verso,
+                "dominado": flashcard.dominado,
+                "acertos_consecutivos": flashcard.acertos_consecutivos,
+                "acertos_para_dominio": Flashcard.ACERTOS_PARA_DOMINIO,
+            },
+        })
+
+    return Response({"lacunas": lacunas_resultado}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def listar_lacunas_view(request, modulo_id):
+    """
+    GET /api/llm/quiz/<modulo_id>/lacunas/
+    Retorna todas as lacunas (com flashcards) do usuário neste módulo,
+    agrupadas por subtopico_ref. Útil para exibir o deck completo no ModuloCard.
+    """
+    try:
+        modulo = Modulo.objects.get(id=modulo_id, trilha__usuario=request.user)
+    except Modulo.DoesNotExist:
+        return Response({"detail": "Módulo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    lacunas = (
+        LacunaConceitual.objects
+        .filter(usuario=request.user, tentativa__quiz__modulo=modulo)
+        .select_related("flashcard")
+        .order_by("subtopico_ref", "conceito")
+    )
+
+    resultado = []
+    for lacuna in lacunas:
+        try:
+            fc = lacuna.flashcard
+            flashcard_data = {
+                "id": fc.id,
+                "frente": fc.frente,
+                "verso": fc.verso,
+                "dominado": fc.dominado,
+                "acertos_consecutivos": fc.acertos_consecutivos,
+                "acertos_para_dominio": Flashcard.ACERTOS_PARA_DOMINIO,
+            }
+        except Flashcard.DoesNotExist:
+            flashcard_data = None
+
+        resultado.append({
+            "id": lacuna.id,
+            "numero_questao": lacuna.numero_questao,
+            "subtopico_ref": lacuna.subtopico_ref,
+            "conceito": lacuna.conceito,
+            "flashcard": flashcard_data,
+        })
+
+    return Response({"lacunas": resultado})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def responder_flashcard_view(request, flashcard_id):
+    """
+    POST /api/llm/flashcards/<flashcard_id>/responder/
+    Body: {"acertou": true|false}
+
+    Atualiza acertos_consecutivos. Acertar incrementa; errar reseta para 0.
+    Quando acertos_consecutivos >= ACERTOS_PARA_DOMINIO, o flashcard é considerado dominado.
+    """
+    from django.utils import timezone as tz
+
+    try:
+        flashcard = Flashcard.objects.select_related("lacuna").get(
+            id=flashcard_id, lacuna__usuario=request.user
+        )
+    except Flashcard.DoesNotExist:
+        return Response({"detail": "Flashcard não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    acertou = bool(request.data.get("acertou", False))
+    if acertou:
+        flashcard.acertos_consecutivos += 1
+    else:
+        flashcard.acertos_consecutivos = 0
+
+    flashcard.ultima_resposta_em = tz.now()
+    flashcard.save(update_fields=["acertos_consecutivos", "ultima_resposta_em"])
+
+    return Response({
+        "acertos_consecutivos": flashcard.acertos_consecutivos,
+        "dominado": flashcard.dominado,
+        "acertos_para_dominio": Flashcard.ACERTOS_PARA_DOMINIO,
+    })

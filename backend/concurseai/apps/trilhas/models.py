@@ -182,6 +182,75 @@ class Proficiencia(models.Model):
         return self.melhor_score >= 0.8
 
 
+class LacunaConceitual(models.Model):
+    """
+    Conceito identificado como frágil a partir de uma resposta errada no quiz.
+    Gerado pela LLM analisando o erro do usuário — 1 lacuna por questão errada.
+    """
+    tentativa = models.ForeignKey(
+        QuizTentativa,
+        on_delete=models.CASCADE,
+        related_name="lacunas",
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="lacunas",
+    )
+    numero_questao = models.PositiveSmallIntegerField(
+        help_text="Índice (0-based) da questão errada na tentativa."
+    )
+    subtopico_ref = models.CharField(
+        max_length=300,
+        help_text="Subtópico ao qual o conceito pertence.",
+    )
+    conceito = models.CharField(
+        max_length=300,
+        help_text="Nome curto do conceito mal compreendido.",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("tentativa", "numero_questao")
+        ordering = ["subtopico_ref", "conceito"]
+        verbose_name = "lacuna conceitual"
+        verbose_name_plural = "lacunas conceituais"
+
+    def __str__(self):
+        return f"{self.usuario.email} — {self.conceito} ({self.subtopico_ref})"
+
+
+class Flashcard(models.Model):
+    """
+    Flashcard de fixação gerado para uma LacunaConceitual.
+    Considera o conceito dominado após ACERTOS_PARA_DOMINIO acertos consecutivos.
+    Resetar ao errar força repetição espaçada.
+    """
+    ACERTOS_PARA_DOMINIO = 2
+
+    lacuna = models.OneToOneField(
+        LacunaConceitual,
+        on_delete=models.CASCADE,
+        related_name="flashcard",
+    )
+    frente = models.TextField(help_text="Pergunta ou estímulo do flashcard.")
+    verso = models.TextField(help_text="Resposta ou explicação do flashcard.")
+    acertos_consecutivos = models.PositiveSmallIntegerField(default=0)
+    ultima_resposta_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "flashcard"
+        verbose_name_plural = "flashcards"
+
+    def __str__(self):
+        status = "✓" if self.dominado else f"{self.acertos_consecutivos}/{self.ACERTOS_PARA_DOMINIO}"
+        return f"[{status}] {self.lacuna.conceito}"
+
+    @property
+    def dominado(self) -> bool:
+        return self.acertos_consecutivos >= self.ACERTOS_PARA_DOMINIO
+
+
 class Modulo(models.Model):
 
     class Status(models.TextChoices):

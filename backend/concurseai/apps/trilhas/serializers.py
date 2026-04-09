@@ -1,17 +1,18 @@
 from rest_framework import serializers
 
-from .models import Modulo, Proficiencia, Trilha
+from .models import Flashcard, LacunaConceitual, Modulo, Proficiencia, Trilha
 
 
 class ModuloSerializer(serializers.ModelSerializer):
     quiz_estrelas = serializers.SerializerMethodField()
     proficiencia = serializers.SerializerMethodField()
+    flashcards_pendentes = serializers.SerializerMethodField()
 
     class Meta:
         model = Modulo
         fields = (
             "id", "nome", "ordem", "peso", "status", "progresso", "topicos",
-            "quiz_estrelas", "proficiencia",
+            "quiz_estrelas", "proficiencia", "flashcards_pendentes",
         )
         read_only_fields = ("id",)
 
@@ -64,6 +65,17 @@ class ModuloSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return result
+
+    def get_flashcards_pendentes(self, obj) -> int:
+        """Número de flashcards ainda não dominados pelo usuário neste módulo."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        return Flashcard.objects.filter(
+            lacuna__usuario=request.user,
+            lacuna__tentativa__quiz__modulo=obj,
+            acertos_consecutivos__lt=Flashcard.ACERTOS_PARA_DOMINIO,
+        ).count()
 
 
 class TrilhaSerializer(serializers.ModelSerializer):
