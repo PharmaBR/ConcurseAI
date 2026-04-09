@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useLLMStream } from "@/hooks/useLLMStream";
 
 interface Props {
@@ -21,10 +22,10 @@ export function ChatExplicacao({ moduloNome }: Props) {
 
   return (
     <div className="border-t border-gray-100 pt-3 mt-1 flex flex-col gap-2">
-      {/* Resposta em streaming */}
+      {/* Resposta em streaming com markdown renderizado */}
       {resposta && (
-        <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-          {resposta}
+        <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 leading-relaxed prose prose-sm prose-blue max-w-none">
+          <ReactMarkdown>{resposta}</ReactMarkdown>
           {streaming && (
             <span className="inline-block w-1.5 h-3.5 bg-blue-400 ml-0.5 align-middle animate-pulse rounded-sm" />
           )}
