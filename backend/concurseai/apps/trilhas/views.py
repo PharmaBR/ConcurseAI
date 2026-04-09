@@ -20,8 +20,9 @@ class TrilhaListView(generics.ListAPIView):
             .select_related("concurso")
             .prefetch_related(
                 "modulos",
-                "modulos__quiz",
-                "modulos__quiz__tentativas",
+                "modulos__quizzes",
+                "modulos__quizzes__tentativas",
+                "modulos__proficiencias",
             )
         )
 
@@ -37,8 +38,9 @@ class TrilhaDetailView(generics.RetrieveAPIView):
             Trilha.objects.filter(usuario=self.request.user)
             .prefetch_related(
                 "modulos",
-                "modulos__quiz",
-                "modulos__quiz__tentativas",
+                "modulos__quizzes",
+                "modulos__quizzes__tentativas",
+                "modulos__proficiencias",
             )
         )
 

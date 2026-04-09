@@ -11,6 +11,20 @@ interface TopicoAninhado {
   subtopicos: string[];
 }
 
+interface ProficienciaEntry {
+  melhor_acertos: number;
+  total: number;
+  score: number;
+  dominado: boolean;
+  tentativas: number;
+}
+
+interface Proficiencia {
+  modulo: ProficienciaEntry | null;
+  topicos: Record<string, ProficienciaEntry>;
+  subtopicos: Record<string, ProficienciaEntry>;
+}
+
 interface Modulo {
   id: number;
   nome: string;
@@ -20,6 +34,7 @@ interface Modulo {
   progresso: number;
   topicos: string[] | TopicoAninhado[];
   quiz_estrelas?: number | null;
+  proficiencia?: Proficiencia | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,17 +62,66 @@ function flattenSubtopicos(topicos: TopicoAninhado[]): string[] {
   return topicos.flatMap((t) => t.subtopicos);
 }
 
+/**
+ * Bolinha de proficiência colorida por score.
+ * cinza=sem tentativa, vermelho<50%, amarelo<80%, verde≥80%
+ */
+function ProfDot({
+  entry,
+  label,
+}: {
+  entry: ProficienciaEntry | undefined;
+  label: string;
+}) {
+  if (!entry) return (
+    <span
+      title={`${label} — sem tentativa`}
+      className="inline-block w-2 h-2 rounded-full bg-gray-200"
+    />
+  );
+
+  const color =
+    entry.dominado
+      ? "bg-green-500"
+      : entry.score >= 0.5
+      ? "bg-yellow-400"
+      : "bg-red-400";
+
+  return (
+    <span
+      title={`${label} — ${Math.round(entry.score * 100)}% (${entry.melhor_acertos}/${entry.total})`}
+      className={`inline-block w-2 h-2 rounded-full ${color}`}
+    />
+  );
+}
+
+/**
+ * Barra de proficiência compacta para tópicos.
+ */
+function TopicoProfBar({ entry, nome }: { entry: ProficienciaEntry | undefined; nome: string }) {
+  if (!entry) return null;
+  const pct = Math.round(entry.score * 100);
+  const color = entry.dominado ? "bg-green-500" : entry.score >= 0.5 ? "bg-yellow-400" : "bg-red-400";
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1" title={`${nome}: ${pct}%`}>
+      <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[10px] text-gray-400 w-6 text-right">{pct}%</span>
+    </div>
+  );
+}
+
 export function ModuloCard({ modulo, onAvancar }: Props) {
   const pesoPercent = Math.round(modulo.peso * 100);
   const nested = isNested(modulo.topicos);
 
-  // Total checkable items: subtopics (nested) or topics (flat)
   const allItems: string[] = nested
     ? flattenSubtopicos(modulo.topicos as TopicoAninhado[])
     : (modulo.topicos as string[]);
   const total = allItems.length;
 
-  // Initialize checkboxes from saved progress
   const initialChecked = total > 0
     ? Array.from({ length: total }, (_, i) => i < Math.round((modulo.progresso / 100) * total))
     : [];
@@ -68,6 +132,11 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
   );
   const [chatAberto, setChatAberto] = useState(false);
   const [quizAberto, setQuizAberto] = useState(false);
+
+  // Proficiência: estado derivado da API, atualizável após quiz
+  const [proficiencia, setProficiencia] = useState<Proficiencia>(
+    modulo.proficiencia ?? { modulo: null, topicos: {}, subtopicos: {} }
+  );
   const [quizEstrelas, setQuizEstrelas] = useState<number | null>(modulo.quiz_estrelas ?? null);
 
   async function handleToggle(index: number) {
@@ -82,12 +151,21 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
     setExpanded((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
   }
 
+  function handleQuizConcluido(estrelas: number, tipo: string, referencia: string) {
+    if (tipo === "modulo") {
+      setQuizEstrelas(estrelas);
+    }
+    // Dispara refresh da proficiência via GET /api/trilhas/ não é necessário aqui —
+    // fazemos uma atualização otimista local baseada nos dados do resultado.
+    // A API retorna melhor_score e dominado mas não o objeto completo, então apenas
+    // setamos as estrelas e deixamos a próxima renderização do servidor atualizar o resto.
+  }
+
   const doneCount = checked.filter(Boolean).length;
   const progressoLocal = total > 0 ? (doneCount / total) * 100 : modulo.progresso;
   const statusLocal =
     progressoLocal >= 100 ? "concluido" : progressoLocal > 0 ? "em_andamento" : "nao_iniciado";
 
-  // For nested format, compute per-topic completion to show a checkmark on the header
   function topicoOffset(topicoIdx: number): number {
     const topicos = modulo.topicos as TopicoAninhado[];
     return topicos.slice(0, topicoIdx).reduce((acc, t) => acc + t.subtopicos.length, 0);
@@ -127,18 +205,25 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
             const offset = topicoOffset(ti);
             const subtotalDone = topico.subtopicos.filter((_, si) => checked[offset + si]).length;
             const topicoCompleto = subtotalDone === topico.subtopicos.length;
+            const topicoProfEntry = proficiencia.topicos[topico.nome];
 
             return (
               <li key={ti} className="border rounded-md overflow-hidden">
-                {/* Cabeçalho do tópico — clicável para expandir/recolher */}
+                {/* Cabeçalho do tópico */}
                 <button
                   type="button"
                   onClick={() => toggleExpanded(ti)}
                   className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
                 >
-                  <span className={`text-sm font-medium ${topicoCompleto ? "text-green-700 line-through" : "text-gray-700"}`}>
-                    {topico.nome}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-sm font-medium ${topicoCompleto ? "text-green-700 line-through" : "text-gray-700"}`}>
+                      {topico.nome}
+                    </span>
+                    {/* Barra de proficiência do tópico */}
+                    {topicoProfEntry && (
+                      <TopicoProfBar entry={topicoProfEntry} nome={topico.nome} />
+                    )}
+                  </div>
                   <span className="flex items-center gap-2 text-xs text-gray-400 shrink-0 ml-2">
                     {subtotalDone}/{topico.subtopicos.length}
                     <span>{expanded[ti] ? "▲" : "▼"}</span>
@@ -150,6 +235,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
                   <ul className="flex flex-col gap-1 px-3 py-2">
                     {topico.subtopicos.map((sub, si) => {
                       const idx = offset + si;
+                      const subProfEntry = proficiencia.subtopicos[sub];
                       return (
                         <li key={si}>
                           <label className="flex items-start gap-2 cursor-pointer group">
@@ -159,9 +245,11 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
                               onChange={() => handleToggle(idx)}
                               className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 cursor-pointer"
                             />
-                            <span className={`text-sm leading-snug ${checked[idx] ? "line-through text-gray-400" : "text-gray-600 group-hover:text-gray-900"}`}>
+                            <span className={`text-sm leading-snug flex-1 ${checked[idx] ? "line-through text-gray-400" : "text-gray-600 group-hover:text-gray-900"}`}>
                               {sub}
                             </span>
+                            {/* Bolinha de proficiência do subtópico */}
+                            <ProfDot entry={subProfEntry} label={sub} />
                           </label>
                         </li>
                       );
@@ -195,6 +283,17 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         </ul>
       )}
 
+      {/* Legenda de proficiência (só exibe se tiver dados) */}
+      {(Object.keys(proficiencia.subtopicos).length > 0 || Object.keys(proficiencia.topicos).length > 0) && (
+        <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
+          <span className="font-medium text-gray-500">Proficiência:</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-green-500" /> ≥ 80%</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-yellow-400" /> 50–79%</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-400" /> &lt; 50%</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-gray-200" /> sem quiz</span>
+        </div>
+      )}
+
       {/* Ações IA */}
       <div className="flex items-center gap-3 mt-1 flex-wrap">
         <button
@@ -212,7 +311,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           📝 {quizEstrelas !== null ? "Refazer quiz" : "Fazer quiz"}
         </button>
 
-        {/* Badge de estrelas */}
+        {/* Badge de estrelas do quiz de módulo */}
         {quizEstrelas !== null && (
           <span className="flex items-center gap-0.5 ml-auto">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -233,8 +332,9 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         <QuizModal
           moduloId={modulo.id}
           moduloNome={modulo.nome}
+          topicos={modulo.topicos}
           onFechar={() => setQuizAberto(false)}
-          onConcluido={(estrelas) => setQuizEstrelas(estrelas)}
+          onConcluido={handleQuizConcluido}
         />
       )}
     </div>

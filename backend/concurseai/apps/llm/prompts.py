@@ -106,55 +106,117 @@ def user_explicar_conteudo(pergunta: str, modulo_nome: str, topico_nome: str = "
     return f"{contexto}.\n\nMinha dúvida: {pergunta}"
 
 
-def system_gerar_quiz(modulo_nome: str, banca: str = "") -> str:
-    """
-    Instrui a LLM a gerar 5 questões cobrindo subtópicos, tópicos e módulo,
-    com dificuldade escalonada (fácil → difícil) no estilo da banca.
-    Retorna JSON — usado com client.complete() (response_format=json_object).
-    """
-    banca_instrucao = ""
-    if banca:
-        estilos = {
-            "CESPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
-            "CEBRASPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
-            "FGV": "enunciados com situações-problema e casos práticos, exigindo raciocínio aplicado.",
-            "FCC": "questões diretas de memorização de regras, classificações e definições.",
-            "VUNESP": "questões com foco em aplicação de normas e classificações objetivas.",
-        }
-        estilo = estilos.get(banca.upper(), f"questões no estilo típico da banca {banca}.")
-        banca_instrucao = f"\n\nEstilo da banca {banca}: {estilo}"
+def _banca_instrucao(banca: str) -> str:
+    """Retorna a instrução de estilo da banca, ou string vazia se não informada."""
+    if not banca:
+        return ""
+    estilos = {
+        "CESPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
+        "CEBRASPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
+        "FGV": "enunciados com situações-problema e casos práticos, exigindo raciocínio aplicado.",
+        "FCC": "questões diretas de memorização de regras, classificações e definições.",
+        "VUNESP": "questões com foco em aplicação de normas e classificações objetivas.",
+        "QUADRIX": "questões com foco em letra de lei, conceitos doutrinários e jurisprudência sumulada.",
+    }
+    estilo = estilos.get(banca.upper(), f"questões no estilo típico da banca {banca}.")
+    return f"\n\nEstilo da banca {banca}: {estilo}"
 
+
+_REGRAS_QUESTAO = (
+    "REGRAS OBRIGATÓRIAS:\n"
+    "1. Retorne APENAS JSON válido, sem texto extra.\n"
+    '2. Estrutura raiz: {"questoes": [...]}\n'
+    "3. Cada questão: "
+    '{"enunciado": string, "alternativas": {"A": string, "B": string, "C": string, "D": string}, '
+    '"gabarito": "A"|"B"|"C"|"D", "explicacao": string, '
+    '"dificuldade": "facil"|"medio"|"dificil", "nivel": "subtopico"|"topico"|"modulo"}\n'
+    "4. Apenas uma alternativa correta; as demais devem ser plausíveis (não óbvias).\n"
+    "5. A explicação justifica o gabarito E menciona por que cada distrator está errado.\n"
+    "6. Varie a posição do gabarito (não repita a mesma letra mais de 2 vezes).\n"
+    "7. Os enunciados devem ser autocontidos — não referencie 'o texto acima' ou 'a lei X'."
+)
+
+
+def system_gerar_quiz_subtopico(modulo_nome: str, subtopico_nome: str, banca: str = "") -> str:
+    """
+    Gera 5 questões focadas EXCLUSIVAMENTE em um único subtópico, com escalonamento
+    fácil → difícil. Usado no nível 1 do quiz progressivo.
+    """
     return (
         f"Você é um elaborador sênior de questões para concursos públicos brasileiros, "
-        f"especializado em {modulo_nome}.{banca_instrucao}\n\n"
-        "Gere EXATAMENTE 5 questões de múltipla escolha (A, B, C, D) "
-        "seguindo esta DISTRIBUIÇÃO OBRIGATÓRIA de cobertura e dificuldade:\n\n"
-        "Q1 — FÁCIL (subtópico): avalia um subtópico isolado — definição direta, "
-        "conceito básico ou recall simples. Candidato que leu o material acerta.\n"
-        "Q2 — FÁCIL/MÉDIO (subtópico): avalia outro subtópico com leve interpretação — "
-        "reconhecimento com aplicação simples.\n"
-        "Q3 — MÉDIO (tópico): integra 2+ subtópicos do mesmo tópico em situação-problema. "
-        "Exige compreensão, não apenas memorização.\n"
-        "Q4 — MÉDIO/DIFÍCIL (tópico): situação-problema mais elaborada, exceção à regra "
-        "ou contraste entre dois tópicos diferentes.\n"
-        "Q5 — DIFÍCIL (módulo): avalia domínio do módulo inteiro — cruza tópicos distantes, "
-        "edge case, pegadinha típica da banca ou caso especial que pega quem só decorou.\n\n"
-        "REGRAS OBRIGATÓRIAS:\n"
-        "1. Retorne APENAS JSON válido, sem texto extra.\n"
-        '2. Estrutura raiz: {"questoes": [...]}\n'
-        "3. Cada questão: "
-        '{"enunciado": string, "alternativas": {"A": string, "B": string, "C": string, "D": string}, '
-        '"gabarito": "A"|"B"|"C"|"D", "explicacao": string, '
-        '"dificuldade": "facil"|"medio"|"dificil", "nivel": "subtopico"|"topico"|"modulo"}\n'
-        "4. Apenas uma alternativa correta; as demais devem ser plausíveis (não óbvias).\n"
-        "5. A explicação justifica o gabarito E menciona por que cada distrator está errado.\n"
-        "6. Varie a posição do gabarito (não repita a mesma letra mais de 2 vezes).\n"
-        "7. Os enunciados devem ser autocontidos — não referencie 'o texto acima' ou 'a lei X'."
+        f"especializado em {modulo_nome}.{_banca_instrucao(banca)}\n\n"
+        f"Você deve criar EXATAMENTE 5 questões cobrindo o subtópico: «{subtopico_nome}».\n\n"
+        "DISTRIBUIÇÃO OBRIGATÓRIA de dificuldade (todas as questões são de nível 'subtopico'):\n"
+        "Q1 — FÁCIL: definição direta ou recall. Candidato que leu o material acerta.\n"
+        "Q2 — FÁCIL: outra definição/conceito básico, abordagem ligeiramente diferente.\n"
+        "Q3 — MÉDIO: aplicação do conceito em situação simples, exige compreensão.\n"
+        "Q4 — MÉDIO: situação-problema mais elaborada ou exceção à regra geral.\n"
+        "Q5 — DIFÍCIL: caso-limite, pegadinha ou detalhe que separa quem domina de quem decorou.\n\n"
+        "Todas as questões devem ter nivel='subtopico'.\n\n"
+        + _REGRAS_QUESTAO
     )
 
 
-def user_gerar_quiz(modulo_nome: str, topicos: list) -> str:
-    """Formata tópicos e subtópicos do módulo para cobertura granular no quiz."""
+def user_gerar_quiz_subtopico(modulo_nome: str, topico_nome: str, subtopico_nome: str) -> str:
+    """Formata o contexto do subtópico para a LLM gerar o quiz de nível 1."""
+    return (
+        f"Módulo: {modulo_nome}\n"
+        f"Tópico pai: {topico_nome}\n"
+        f"Subtópico a avaliar: {subtopico_nome}\n\n"
+        "Gere as 5 questões sobre este subtópico com escalonamento fácil → difícil."
+    )
+
+
+def system_gerar_quiz_topico(modulo_nome: str, topico_nome: str, banca: str = "") -> str:
+    """
+    Gera 5 questões que integram os subtópicos de um único tópico, escalando de
+    recall até integração e edge cases. Nível 2 do quiz progressivo.
+    """
+    return (
+        f"Você é um elaborador sênior de questões para concursos públicos brasileiros, "
+        f"especializado em {modulo_nome}.{_banca_instrucao(banca)}\n\n"
+        f"Você deve criar EXATAMENTE 5 questões avaliando o tópico: «{topico_nome}».\n\n"
+        "DISTRIBUIÇÃO OBRIGATÓRIA de cobertura e dificuldade:\n"
+        "Q1 — FÁCIL (subtopico): avalia um subtópico isolado — definição direta ou recall.\n"
+        "Q2 — FÁCIL (subtopico): avalia outro subtópico do mesmo tópico — leve interpretação.\n"
+        "Q3 — MÉDIO (topico): integra 2+ subtópicos em situação-problema; exige compreensão.\n"
+        "Q4 — MÉDIO (topico): situação mais elaborada — contraste entre subtópicos ou exceção.\n"
+        "Q5 — DIFÍCIL (topico): domínio pleno do tópico — caso especial, pegadinha ou detalhe "
+        "que exige ter entendido, não apenas memorizado.\n\n"
+        + _REGRAS_QUESTAO
+    )
+
+
+def user_gerar_quiz_topico(modulo_nome: str, topico_nome: str, subtopicos: list) -> str:
+    """Formata o tópico e seus subtópicos para a LLM gerar o quiz de nível 2."""
+    linhas = [f"Módulo: {modulo_nome}", f"Tópico: {topico_nome}", "", "Subtópicos disponíveis:"]
+    for sub in subtopicos[:8]:
+        linhas.append(f"  • {sub}")
+    return "\n".join(linhas) + "\n\nGere as 5 questões integrando os subtópicos acima."
+
+
+def system_gerar_quiz_modulo(modulo_nome: str, banca: str = "") -> str:
+    """
+    Gera 5 questões interdisciplinares cobrindo o módulo inteiro, com características
+    históricas da banca. Nível 3 (módulo completo) do quiz progressivo.
+    """
+    return (
+        f"Você é um elaborador sênior de questões para concursos públicos brasileiros, "
+        f"especializado em {modulo_nome}.{_banca_instrucao(banca)}\n\n"
+        "Gere EXATAMENTE 5 questões de múltipla escolha (A, B, C, D) "
+        "cobrindo o MÓDULO INTEIRO de forma interdisciplinar:\n\n"
+        "Q1 — FÁCIL (subtopico): avalia um subtópico isolado — definição direta ou recall simples.\n"
+        "Q2 — FÁCIL/MÉDIO (subtopico): outro subtópico com leve interpretação.\n"
+        "Q3 — MÉDIO (topico): integra 2+ subtópicos do mesmo tópico em situação-problema.\n"
+        "Q4 — MÉDIO/DIFÍCIL (topico): situação elaborada, exceção ou contraste entre tópicos.\n"
+        "Q5 — DIFÍCIL (modulo): cruza tópicos DISTANTES do módulo — edge case, pegadinha típica "
+        "da banca, ou caso especial que pega quem só decorou sem entender.\n\n"
+        + _REGRAS_QUESTAO
+    )
+
+
+def user_gerar_quiz_modulo(modulo_nome: str, topicos: list) -> str:
+    """Formata todos os tópicos e subtópicos do módulo para o quiz de nível 3."""
     linhas = []
     for t in topicos[:8]:
         if isinstance(t, dict):
@@ -165,18 +227,11 @@ def user_gerar_quiz(modulo_nome: str, topicos: list) -> str:
             linhas.append(f"Tópico: {t}")
 
     conteudo = "\n".join(linhas) if linhas else modulo_nome
-
     return (
         f"Módulo: {modulo_nome}\n\n"
         f"Conteúdo disponível (tópicos e subtópicos):\n{conteudo}\n\n"
-        "Gere as 5 questões respeitando a distribuição de cobertura e dificuldade solicitada."
+        "Gere as 5 questões cruzando tópicos distantes com escalonamento fácil → difícil."
     )
 
 
 # TODO FASE 2: system_analisar_compatibilidade() — para matching candidato × edital
-# def system_analisar_compatibilidade() -> str:
-#     ...
-
-# TODO FASE 2: system_gerar_quiz(modulo, subtopico) — quiz granular por subtópico
-# def system_gerar_quiz(modulo: str, subtopico: str) -> str:
-#     ...

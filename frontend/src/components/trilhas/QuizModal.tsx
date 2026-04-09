@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -13,14 +13,29 @@ interface Questao {
   nivel?: "subtopico" | "topico" | "modulo";
 }
 
+interface TopicoAninhado {
+  nome: string;
+  subtopicos: string[];
+}
+
 interface Props {
   moduloId: number;
   moduloNome: string;
+  topicos: string[] | TopicoAninhado[];
   onFechar: () => void;
-  onConcluido?: (estrelas: number) => void;
+  onConcluido?: (estrelas: number, tipo: string, referencia: string) => void;
 }
 
-type Fase = "carregando" | "quiz" | "salvando" | "resultado" | "erro";
+type Fase =
+  | "selecionando_nivel"
+  | "selecionando_item"
+  | "carregando"
+  | "quiz"
+  | "salvando"
+  | "resultado"
+  | "erro";
+
+type TipoQuiz = "subtopico" | "topico" | "modulo";
 
 const DIFICULDADE_LABEL: Record<string, string> = {
   facil: "Fácil",
@@ -50,31 +65,84 @@ function Estrelas({ total, preenchidas }: { total: number; preenchidas: number }
   );
 }
 
-export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props) {
-  const [fase, setFase] = useState<Fase>("carregando");
+function isNested(topicos: string[] | TopicoAninhado[]): topicos is TopicoAninhado[] {
+  return topicos.length > 0 && typeof topicos[0] === "object";
+}
+
+export function QuizModal({ moduloId, moduloNome, topicos, onFechar, onConcluido }: Props) {
+  const nested = isNested(topicos);
+
+  // Seleção de nível
+  const [tipoSelecionado, setTipoSelecionado] = useState<TipoQuiz>("modulo");
+  const [topicoSelecionado, setTopicoSelecionado] = useState<TopicoAninhado | null>(null);
+  const [subtopico, setSubtopico] = useState("");
+
+  // Quiz
+  const [fase, setFase] = useState<Fase>("selecionando_nivel");
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [atual, setAtual] = useState(0);
   const [respostas, setRespostas] = useState<Record<number, string>>({});
   const [mostrarExplicacao, setMostrarExplicacao] = useState(false);
-  const [resultado, setResultado] = useState<{ acertos: number; total: number; estrelas: number } | null>(null);
+  const [resultado, setResultado] = useState<{
+    acertos: number;
+    total: number;
+    estrelas: number;
+    melhor_score?: number;
+    dominado?: boolean;
+  } | null>(null);
   const [erro, setErro] = useState("");
 
-  useEffect(() => {
+  // ──────────────────────────────────────────────
+  // Seleção de nível
+  // ──────────────────────────────────────────────
+
+  function handleConfirmarNivel() {
+    if (tipoSelecionado === "modulo") {
+      iniciarQuiz("modulo", "");
+    } else if (tipoSelecionado === "topico") {
+      setFase("selecionando_item");
+    } else {
+      // subtopico
+      setFase("selecionando_item");
+    }
+  }
+
+  function handleConfirmarItem() {
+    if (tipoSelecionado === "topico" && topicoSelecionado) {
+      iniciarQuiz("topico", topicoSelecionado.nome);
+    } else if (tipoSelecionado === "subtopico" && topicoSelecionado && subtopico) {
+      iniciarQuiz("subtopico", subtopico, topicoSelecionado.nome);
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // Geração do quiz
+  // ──────────────────────────────────────────────
+
+  async function iniciarQuiz(tipo: TipoQuiz, referencia: string, topico_nome = "") {
+    setFase("carregando");
     const token = localStorage.getItem("access_token");
     if (!token) { setErro("Faça login para usar o quiz."); setFase("erro"); return; }
 
-    fetch(`${API_URL}/api/llm/quiz/${moduloId}/`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.questoes?.length) throw new Error("Sem questões.");
-        setQuestoes(data.questoes);
-        setFase("quiz");
-      })
-      .catch((e) => { setErro(e.message || "Erro ao gerar quiz."); setFase("erro"); });
-  }, [moduloId]);
+    try {
+      const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tipo, referencia, topico_nome }),
+      });
+      const data = await res.json();
+      if (!data.questoes?.length) throw new Error("Sem questões.");
+      setQuestoes(data.questoes);
+      setFase("quiz");
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : "Erro ao gerar quiz.");
+      setFase("erro");
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // Lógica do quiz
+  // ──────────────────────────────────────────────
 
   const questaoAtual = questoes[atual];
   const respondida = respostas[atual] !== undefined;
@@ -98,21 +166,26 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
   async function salvarTentativa() {
     setFase("salvando");
     const token = localStorage.getItem("access_token");
+
+    // tipo e referencia são os que foram usados para gerar o quiz
+    const tipo = tipoSelecionado;
+    const referencia =
+      tipo === "subtopico" ? subtopico : tipo === "topico" ? (topicoSelecionado?.nome ?? "") : "";
+
     try {
       const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/tentativa/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          respostas: Object.fromEntries(
-            Object.entries(respostas).map(([k, v]) => [String(k), v])
-          ),
+          respostas: Object.fromEntries(Object.entries(respostas).map(([k, v]) => [String(k), v])),
+          tipo,
+          referencia,
         }),
       });
       const data = await res.json();
       setResultado(data);
-      onConcluido?.(data.estrelas);
+      onConcluido?.(data.estrelas, tipo, referencia);
     } catch {
-      // mesmo com erro, mostra resultado local
       const acertos = questoes.filter((q, i) => respostas[i] === q.gabarito).length;
       setResultado({ acertos, total: questoes.length, estrelas: acertos });
     } finally {
@@ -125,7 +198,9 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
     setRespostas({});
     setMostrarExplicacao(false);
     setResultado(null);
-    setFase("quiz");
+    setFase("selecionando_nivel");
+    setTopicoSelecionado(null);
+    setSubtopico("");
   }
 
   const corAlternativa = (letra: string) => {
@@ -136,12 +211,24 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
   };
 
   const mensagemResultado = (estrelas: number) => {
-    if (estrelas === 5) return "Perfeito! Domínio total do módulo. ✨";
+    if (estrelas === 5) return "Perfeito! Domínio total. ✨";
     if (estrelas === 4) return "Excelente! Apenas um detalhe a revisar.";
     if (estrelas === 3) return "Bom progresso — revise os erros antes de avançar.";
-    if (estrelas === 2) return "Estude mais o módulo antes de continuar.";
-    return "Revise todo o módulo e refaça o quiz.";
+    if (estrelas === 2) return "Estude mais antes de continuar.";
+    return "Revise o conteúdo e refaça o quiz.";
   };
+
+  // Labels contextuais
+  const nivelAtual =
+    tipoSelecionado === "subtopico"
+      ? `Subtópico: ${subtopico}`
+      : tipoSelecionado === "topico"
+      ? `Tópico: ${topicoSelecionado?.nome ?? ""}`
+      : "Módulo completo";
+
+  // ──────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -152,6 +239,9 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Quiz</p>
             <h2 className="font-semibold text-gray-800 leading-tight">{moduloNome}</h2>
+            {(fase === "quiz" || fase === "resultado") && (
+              <p className="text-xs text-blue-500 mt-0.5">{nivelAtual}</p>
+            )}
           </div>
           <button onClick={onFechar} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
@@ -159,7 +249,161 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
         {/* Corpo */}
         <div className="overflow-y-auto flex-1 px-5 py-4">
 
-          {/* Carregando */}
+          {/* ── SELEÇÃO DE NÍVEL ── */}
+          {fase === "selecionando_nivel" && (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-gray-600 font-medium">Escolha o nível do quiz:</p>
+
+              <div className="flex flex-col gap-2">
+                {[
+                  {
+                    id: "subtopico" as TipoQuiz,
+                    label: "Por Subtópico",
+                    desc: "5 questões focadas em 1 subtópico — diagnóstico granular",
+                    icon: "🔬",
+                    disabled: !nested,
+                  },
+                  {
+                    id: "topico" as TipoQuiz,
+                    label: "Por Tópico",
+                    desc: "5 questões integrando os subtópicos de 1 tópico",
+                    icon: "📖",
+                    disabled: !nested,
+                  },
+                  {
+                    id: "modulo" as TipoQuiz,
+                    label: "Módulo completo",
+                    desc: "5 questões interdisciplinares cruzando todos os tópicos",
+                    icon: "🎯",
+                    disabled: false,
+                  },
+                ].map((op) => (
+                  <button
+                    key={op.id}
+                    disabled={op.disabled}
+                    onClick={() => setTipoSelecionado(op.id)}
+                    className={`text-left border rounded-lg px-4 py-3 transition-colors ${
+                      op.disabled
+                        ? "opacity-40 cursor-not-allowed border-gray-200"
+                        : tipoSelecionado === op.id
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="font-medium text-sm text-gray-800">
+                      {op.icon} {op.label}
+                    </span>
+                    <p className="text-xs text-gray-400 mt-0.5">{op.desc}</p>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleConfirmarNivel}
+                className="w-full mt-2 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Continuar →
+              </button>
+            </div>
+          )}
+
+          {/* ── SELEÇÃO DE ITEM (tópico ou subtópico) ── */}
+          {fase === "selecionando_item" && nested && (
+            <div className="flex flex-col gap-4">
+              {tipoSelecionado === "topico" ? (
+                <>
+                  <p className="text-sm text-gray-600 font-medium">Selecione o tópico:</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {(topicos as TopicoAninhado[]).map((t) => (
+                      <li key={t.nome}>
+                        <button
+                          onClick={() => setTopicoSelecionado(t)}
+                          className={`w-full text-left border rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                            topicoSelecionado?.nome === t.nome
+                              ? "border-blue-500 bg-blue-50 text-blue-800"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                        >
+                          {t.nome}
+                          <span className="text-xs text-gray-400 ml-2">
+                            ({t.subtopicos.length} subtópicos)
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                /* subtopico — primeiro seleciona o tópico pai, depois o subtópico */
+                <>
+                  {!topicoSelecionado ? (
+                    <>
+                      <p className="text-sm text-gray-600 font-medium">Selecione o tópico pai:</p>
+                      <ul className="flex flex-col gap-1.5">
+                        {(topicos as TopicoAninhado[]).map((t) => (
+                          <li key={t.nome}>
+                            <button
+                              onClick={() => setTopicoSelecionado(t)}
+                              className="w-full text-left border rounded-lg px-3 py-2.5 text-sm border-gray-200 hover:border-gray-300 text-gray-700 transition-colors"
+                            >
+                              {t.nome}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => { setTopicoSelecionado(null); setSubtopico(""); }}
+                        className="text-xs text-blue-500 hover:underline text-left"
+                      >
+                        ← {topicoSelecionado.nome}
+                      </button>
+                      <p className="text-sm text-gray-600 font-medium">Selecione o subtópico:</p>
+                      <ul className="flex flex-col gap-1.5">
+                        {topicoSelecionado.subtopicos.map((sub) => (
+                          <li key={sub}>
+                            <button
+                              onClick={() => setSubtopico(sub)}
+                              className={`w-full text-left border rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                                subtopico === sub
+                                  ? "border-blue-500 bg-blue-50 text-blue-800"
+                                  : "border-gray-200 hover:border-gray-300 text-gray-700"
+                              }`}
+                            >
+                              {sub}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => { setFase("selecionando_nivel"); setTopicoSelecionado(null); setSubtopico(""); }}
+                  className="flex-1 text-sm border border-gray-300 text-gray-600 py-2 rounded-lg hover:bg-gray-50"
+                >
+                  ← Voltar
+                </button>
+                <button
+                  onClick={handleConfirmarItem}
+                  disabled={
+                    tipoSelecionado === "topico" ? !topicoSelecionado :
+                    !topicoSelecionado || !subtopico
+                  }
+                  className="flex-1 text-sm bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Gerar quiz →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── CARREGANDO / SALVANDO ── */}
           {(fase === "carregando" || fase === "salvando") && (
             <div className="flex flex-col items-center gap-3 py-10 text-gray-400">
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
@@ -169,12 +413,12 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
             </div>
           )}
 
-          {/* Erro */}
+          {/* ── ERRO ── */}
           {fase === "erro" && (
             <div className="py-8 text-center text-red-500 text-sm">{erro}</div>
           )}
 
-          {/* Quiz */}
+          {/* ── QUIZ ── */}
           {fase === "quiz" && questaoAtual && (
             <div className="flex flex-col gap-4">
               {/* Progresso */}
@@ -233,7 +477,7 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
             </div>
           )}
 
-          {/* Resultado */}
+          {/* ── RESULTADO ── */}
           {fase === "resultado" && resultado && (
             <div className="flex flex-col items-center gap-5 py-4 text-center">
               <Estrelas total={5} preenchidas={resultado.estrelas} />
@@ -242,6 +486,11 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
                   {resultado.acertos}/{resultado.total}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">{mensagemResultado(resultado.estrelas)}</p>
+                {resultado.dominado !== undefined && (
+                  <p className={`text-xs font-medium mt-2 ${resultado.dominado ? "text-green-600" : "text-orange-500"}`}>
+                    {resultado.dominado ? "✓ Conteúdo dominado (≥ 80%)" : "Ainda não dominado — continue praticando"}
+                  </p>
+                )}
               </div>
 
               {/* Resumo por questão */}
@@ -262,7 +511,7 @@ export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props
                   onClick={reiniciar}
                   className="flex-1 text-sm border border-blue-600 text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
                 >
-                  Refazer quiz
+                  Novo quiz
                 </button>
                 <button
                   onClick={onFechar}

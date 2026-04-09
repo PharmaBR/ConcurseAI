@@ -20,7 +20,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from concurseai.apps.concursos.models import Concurso
-from concurseai.apps.trilhas.models import Modulo, QuizGerado, QuizTentativa, Trilha
+from concurseai.apps.trilhas.models import Modulo, Proficiencia, QuizGerado, QuizTentativa, Trilha
 from concurseai.apps.users.models import User
 
 from .service import (
@@ -154,8 +154,16 @@ async def explicar_stream_view(request):
 def gerar_quiz_view(request, modulo_id):
     """
     POST /api/llm/quiz/<modulo_id>/
-    Gera (ou retorna existente) quiz de 5 questões para o módulo via LLM.
-    Persiste em QuizGerado (OneToOne com Modulo).
+    Body (opcional): {
+      "tipo": "subtopico"|"topico"|"modulo",   (default: "modulo")
+      "referencia": "<nome do subtópico ou tópico>",  (obrigatório para subtopico/topico)
+      "topico_nome": "<nome do tópico pai>",   (obrigatório quando tipo=subtopico)
+      "regenerar": true                        (força nova geração mesmo se já existe)
+    }
+
+    Retorna ou gera quiz de 5 questões no nível solicitado.
+    Cache: retorna o quiz existente (tipo+referencia) sem chamar a LLM, a menos que
+    'regenerar': true seja enviado.
     """
     try:
         modulo = Modulo.objects.select_related(
@@ -164,20 +172,40 @@ def gerar_quiz_view(request, modulo_id):
     except Modulo.DoesNotExist:
         return Response({"detail": "Módulo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Retorna quiz existente sem chamar a LLM novamente
-    quiz_existente = QuizGerado.objects.filter(modulo=modulo).first()
-    if quiz_existente:
-        return Response({"questoes": quiz_existente.questoes}, status=status.HTTP_200_OK)
+    body = {}
+    if request.body:
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    tipo = body.get("tipo", "modulo")
+    referencia = body.get("referencia", "").strip()
+    topico_nome = body.get("topico_nome", "").strip()
+    regenerar = body.get("regenerar", False)
+
+    if tipo not in ("subtopico", "topico", "modulo"):
+        return Response({"detail": "Tipo inválido. Use 'subtopico', 'topico' ou 'modulo'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Cache: retorna quiz existente salvo para este (modulo, tipo, referencia)
+    if not regenerar:
+        quiz_existente = QuizGerado.objects.filter(modulo=modulo, tipo=tipo, referencia=referencia).first()
+        if quiz_existente:
+            return Response({"questoes": quiz_existente.questoes}, status=status.HTTP_200_OK)
 
     banca = modulo.trilha.concurso.banca.nome if modulo.trilha.concurso.banca else ""
 
     try:
-        data = async_to_sync(gerar_quiz_para_modulo)(modulo, banca=banca)
+        data = async_to_sync(gerar_quiz_para_modulo)(
+            modulo, banca=banca, tipo=tipo, referencia=referencia, topico_nome=topico_nome
+        )
     except LLMServiceError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     quiz, created = QuizGerado.objects.update_or_create(
         modulo=modulo,
+        tipo=tipo,
+        referencia=referencia,
         defaults={"questoes": data["questoes"]},
     )
     return Response(
@@ -191,18 +219,29 @@ def gerar_quiz_view(request, modulo_id):
 def salvar_tentativa_view(request, modulo_id):
     """
     POST /api/llm/quiz/<modulo_id>/tentativa/
-    Body: {"respostas": {"0": "A", "1": "C", ...}}
+    Body: {
+      "respostas": {"0": "A", "1": "C", ...},
+      "tipo": "subtopico"|"topico"|"modulo",   (default: "modulo")
+      "referencia": "<nome do subtópico ou tópico>"
+    }
 
-    Calcula acertos, persiste a tentativa e retorna acertos + estrelas.
-    O melhor score fica disponível via GET /api/trilhas/<id>/ no campo quiz_estrelas.
+    Calcula acertos, persiste a tentativa e atualiza Proficiencia no nível correspondente.
+    Retorna acertos, total, estrelas e o score de proficiência atualizado.
     """
     try:
         modulo = Modulo.objects.select_related("trilha__usuario").get(
             id=modulo_id, trilha__usuario=request.user
         )
-        quiz = QuizGerado.objects.get(modulo=modulo)
-    except (Modulo.DoesNotExist, QuizGerado.DoesNotExist):
-        return Response({"detail": "Quiz não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    except Modulo.DoesNotExist:
+        return Response({"detail": "Módulo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    tipo = request.data.get("tipo", "modulo")
+    referencia = request.data.get("referencia", "").strip() if request.data.get("referencia") else ""
+
+    try:
+        quiz = QuizGerado.objects.get(modulo=modulo, tipo=tipo, referencia=referencia)
+    except QuizGerado.DoesNotExist:
+        return Response({"detail": "Quiz não encontrado para este nível."}, status=status.HTTP_404_NOT_FOUND)
 
     respostas = request.data.get("respostas", {})
     acertos = sum(
@@ -219,7 +258,28 @@ def salvar_tentativa_view(request, modulo_id):
         respostas=respostas,
     )
 
+    # Atualiza Proficiencia — mantém apenas o melhor score histórico
+    prof, prof_created = Proficiencia.objects.get_or_create(
+        modulo=modulo,
+        usuario=request.user,
+        nivel=tipo,
+        referencia=referencia,
+        defaults={"melhor_acertos": acertos, "total_questoes": total, "total_tentativas": 1},
+    )
+    if not prof_created:
+        prof.total_tentativas += 1
+        if acertos > prof.melhor_acertos:
+            prof.melhor_acertos = acertos
+            prof.total_questoes = total
+        prof.save(update_fields=["melhor_acertos", "total_questoes", "total_tentativas", "atualizado_em"])
+
     return Response(
-        {"acertos": acertos, "total": total, "estrelas": tentativa.estrelas},
+        {
+            "acertos": acertos,
+            "total": total,
+            "estrelas": tentativa.estrelas,
+            "melhor_score": prof.melhor_score,
+            "dominado": prof.dominado,
+        },
         status=status.HTTP_201_CREATED,
     )

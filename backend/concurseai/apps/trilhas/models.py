@@ -43,37 +43,61 @@ class Trilha(models.Model):
 class QuizGerado(models.Model):
     """
     Quiz de múltipla escolha gerado pela LLM para um módulo específico.
-    Cada módulo pode ter no máximo um quiz (unique on modulo).
+    Suporta três níveis: subtópico isolado, tópico inteiro, módulo completo.
+    A combinação (modulo, tipo, referencia) é única — evita regeneração duplicada.
+
     Estrutura de 'questoes':
     [
       {
         "enunciado": "...",
         "alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."},
         "gabarito": "A",
-        "explicacao": "..."
+        "explicacao": "...",
+        "dificuldade": "facil"|"medio"|"dificil",
+        "nivel": "subtopico"|"topico"|"modulo"
       }
     ]
     """
-    modulo = models.OneToOneField(
+
+    class Tipo(models.TextChoices):
+        SUBTOPICO = "subtopico", "Subtópico"
+        TOPICO = "topico", "Tópico"
+        MODULO = "modulo", "Módulo"
+
+    modulo = models.ForeignKey(
         "Modulo",
         on_delete=models.CASCADE,
-        related_name="quiz",
+        related_name="quizzes",
+    )
+    tipo = models.CharField(
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.MODULO,
+        help_text="Nível do quiz: subtópico isolado, tópico inteiro ou módulo completo.",
+    )
+    referencia = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Nome do subtópico ou tópico avaliado. Vazio para quiz de módulo.",
     )
     questoes = models.JSONField(default=list)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        unique_together = ("modulo", "tipo", "referencia")
         verbose_name = "quiz gerado"
         verbose_name_plural = "quizzes gerados"
 
     def __str__(self):
-        return f"Quiz — {self.modulo}"
+        ref = f" › {self.referencia}" if self.referencia else ""
+        return f"Quiz [{self.tipo}]{ref} — {self.modulo}"
 
 
 class QuizTentativa(models.Model):
     """
     Registro de cada tentativa de quiz feita por um usuário.
-    Permite calcular o melhor score (estrelas) para validar o conhecimento declarado.
+    Transitivamente herda o tipo/referencia do QuizGerado associado.
     """
     quiz = models.ForeignKey(QuizGerado, on_delete=models.CASCADE, related_name="tentativas")
     usuario = models.ForeignKey(
@@ -96,8 +120,66 @@ class QuizTentativa(models.Model):
 
     @property
     def estrelas(self) -> int:
-        """Converte acertos em estrelas (0–5)."""
-        return self.acertos  # 1 acerto = 1 estrela, máximo 5
+        """Converte acertos em estrelas (0–5). 1 acerto = 1 estrela."""
+        return self.acertos
+
+
+class Proficiencia(models.Model):
+    """
+    Melhor score do usuário por nível de granularidade (subtópico / tópico / módulo).
+    Atualizado a cada tentativa de quiz, mantendo apenas o melhor resultado.
+    Serve como painel de diagnóstico de fragilidades por objeto do conhecimento.
+    """
+
+    class Nivel(models.TextChoices):
+        SUBTOPICO = "subtopico", "Subtópico"
+        TOPICO = "topico", "Tópico"
+        MODULO = "modulo", "Módulo"
+
+    modulo = models.ForeignKey(
+        "Modulo",
+        on_delete=models.CASCADE,
+        related_name="proficiencias",
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="proficiencias",
+    )
+    nivel = models.CharField(max_length=20, choices=Nivel.choices)
+    referencia = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Nome do subtópico ou tópico. Vazio para nível módulo.",
+    )
+    melhor_acertos = models.PositiveSmallIntegerField(default=0)
+    total_questoes = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Total de questões do quiz que gerou o melhor score.",
+    )
+    total_tentativas = models.PositiveSmallIntegerField(default=0)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("modulo", "usuario", "nivel", "referencia")
+        ordering = ["nivel", "referencia"]
+        verbose_name = "proficiência"
+        verbose_name_plural = "proficiências"
+
+    def __str__(self):
+        ref = f" › {self.referencia}" if self.referencia else ""
+        return f"{self.usuario.email} [{self.nivel}]{ref} — {self.melhor_acertos}/{self.total_questoes}"
+
+    @property
+    def melhor_score(self) -> float:
+        """Score 0.0–1.0 (acertos/total)."""
+        return self.melhor_acertos / self.total_questoes if self.total_questoes > 0 else 0.0
+
+    @property
+    def dominado(self) -> bool:
+        """Considera dominado quando acerta ≥ 80% das questões."""
+        return self.melhor_score >= 0.8
 
 
 class Modulo(models.Model):

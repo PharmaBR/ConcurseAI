@@ -60,9 +60,19 @@ async def gerar_trilha_para_concurso(concurso) -> dict:
     return data
 
 
-async def gerar_quiz_para_modulo(modulo, banca: str = "") -> dict:
+async def gerar_quiz_para_modulo(
+    modulo,
+    banca: str = "",
+    tipo: str = "modulo",
+    referencia: str = "",
+    topico_nome: str = "",
+) -> dict:
     """
-    Gera 5 questões de múltipla escolha para um módulo via LLM.
+    Gera 5 questões para um módulo via LLM com suporte a três níveis progressivos:
+      - tipo='subtopico': 5 questões sobre um subtópico isolado (referencia=nome_subtopico,
+                          topico_nome=nome_topico_pai)
+      - tipo='topico':    5 questões integrando os subtópicos de um tópico (referencia=nome_topico)
+      - tipo='modulo':    5 questões interdisciplinares cobrindo o módulo inteiro
 
     Retorna dict com {"questoes": [...]} — NÃO persiste (responsabilidade da view).
     Raises LLMServiceError se a resposta for inválida.
@@ -72,13 +82,32 @@ async def gerar_quiz_para_modulo(modulo, banca: str = "") -> dict:
             f"Módulo '{modulo.nome}' não possui tópicos para gerar quiz."
         )
 
-    system_prompt = prompts.system_gerar_quiz(modulo.nome, banca=banca)
-    user_message = prompts.user_gerar_quiz(modulo.nome, modulo.topicos)
+    if tipo == "subtopico":
+        if not referencia:
+            raise LLMServiceError("Para quiz de subtópico, o campo 'referencia' é obrigatório.")
+        system_prompt = prompts.system_gerar_quiz_subtopico(modulo.nome, referencia, banca=banca)
+        user_message = prompts.user_gerar_quiz_subtopico(modulo.nome, topico_nome, referencia)
+
+    elif tipo == "topico":
+        if not referencia:
+            raise LLMServiceError("Para quiz de tópico, o campo 'referencia' é obrigatório.")
+        # Localiza os subtópicos do tópico solicitado
+        subtopicos: list[str] = []
+        for t in modulo.topicos:
+            if isinstance(t, dict) and t.get("nome") == referencia:
+                subtopicos = t.get("subtopicos", [])
+                break
+        system_prompt = prompts.system_gerar_quiz_topico(modulo.nome, referencia, banca=banca)
+        user_message = prompts.user_gerar_quiz_topico(modulo.nome, referencia, subtopicos)
+
+    else:  # modulo
+        system_prompt = prompts.system_gerar_quiz_modulo(modulo.nome, banca=banca)
+        user_message = prompts.user_gerar_quiz_modulo(modulo.nome, modulo.topicos)
 
     try:
         raw = await client.complete(system_prompt, user_message)
     except Exception as exc:
-        logger.exception("Erro na chamada LLM para quiz do módulo %s", modulo.id)
+        logger.exception("Erro na chamada LLM para quiz [%s/%s] módulo %s", tipo, referencia, modulo.id)
         raise LLMServiceError(f"Falha na comunicação com a LLM: {exc}") from exc
 
     try:
