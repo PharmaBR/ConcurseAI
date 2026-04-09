@@ -17,8 +17,12 @@ class TrilhaListView(generics.ListAPIView):
     def get_queryset(self):
         return (
             Trilha.objects.filter(usuario=self.request.user)
-            .prefetch_related("modulos")
             .select_related("concurso")
+            .prefetch_related(
+                "modulos",
+                "modulos__quiz",
+                "modulos__quiz__tentativas",
+            )
         )
 
 
@@ -29,7 +33,14 @@ class TrilhaDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Trilha.objects.filter(usuario=self.request.user).prefetch_related("modulos")
+        return (
+            Trilha.objects.filter(usuario=self.request.user)
+            .prefetch_related(
+                "modulos",
+                "modulos__quiz",
+                "modulos__quiz__tentativas",
+            )
+        )
 
 
 @api_view(["PATCH"])

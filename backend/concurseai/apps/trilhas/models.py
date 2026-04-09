@@ -70,6 +70,36 @@ class QuizGerado(models.Model):
         return f"Quiz — {self.modulo}"
 
 
+class QuizTentativa(models.Model):
+    """
+    Registro de cada tentativa de quiz feita por um usuário.
+    Permite calcular o melhor score (estrelas) para validar o conhecimento declarado.
+    """
+    quiz = models.ForeignKey(QuizGerado, on_delete=models.CASCADE, related_name="tentativas")
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="quiz_tentativas",
+    )
+    acertos = models.PositiveSmallIntegerField()
+    total = models.PositiveSmallIntegerField()
+    respostas = models.JSONField(default=dict, help_text='{"0": "A", "1": "C", ...}')
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "tentativa de quiz"
+        verbose_name_plural = "tentativas de quiz"
+
+    def __str__(self):
+        return f"{self.usuario.email} — {self.quiz} — {self.acertos}/{self.total} ({'★' * self.estrelas})"
+
+    @property
+    def estrelas(self) -> int:
+        """Converte acertos em estrelas (0–5)."""
+        return self.acertos  # 1 acerto = 1 estrela, máximo 5
+
+
 class Modulo(models.Model):
 
     class Status(models.TextChoices):

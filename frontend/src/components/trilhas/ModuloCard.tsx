@@ -19,6 +19,7 @@ interface Modulo {
   status: "nao_iniciado" | "em_andamento" | "concluido";
   progresso: number;
   topicos: string[] | TopicoAninhado[];
+  quiz_estrelas?: number | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -67,6 +68,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
   );
   const [chatAberto, setChatAberto] = useState(false);
   const [quizAberto, setQuizAberto] = useState(false);
+  const [quizEstrelas, setQuizEstrelas] = useState<number | null>(modulo.quiz_estrelas ?? null);
 
   async function handleToggle(index: number) {
     const next = checked.map((v, i) => (i === index ? !v : v));
@@ -194,7 +196,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
       )}
 
       {/* Ações IA */}
-      <div className="flex gap-3 mt-1">
+      <div className="flex items-center gap-3 mt-1 flex-wrap">
         <button
           type="button"
           onClick={() => setChatAberto((v) => !v)}
@@ -207,8 +209,22 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           onClick={() => setQuizAberto(true)}
           className="text-xs text-purple-600 hover:text-purple-800 transition-colors"
         >
-          📝 Fazer quiz
+          📝 {quizEstrelas !== null ? "Refazer quiz" : "Fazer quiz"}
         </button>
+
+        {/* Badge de estrelas */}
+        {quizEstrelas !== null && (
+          <span className="flex items-center gap-0.5 ml-auto">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <span
+                key={i}
+                className={`text-sm leading-none ${i < quizEstrelas! ? "text-yellow-400" : "text-gray-200"}`}
+              >
+                ★
+              </span>
+            ))}
+          </span>
+        )}
       </div>
 
       {chatAberto && <ChatExplicacao moduloNome={modulo.nome} />}
@@ -218,6 +234,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           moduloId={modulo.id}
           moduloNome={modulo.nome}
           onFechar={() => setQuizAberto(false)}
+          onConcluido={(estrelas) => setQuizEstrelas(estrelas)}
         />
       )}
     </div>

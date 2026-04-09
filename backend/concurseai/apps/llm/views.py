@@ -20,7 +20,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from concurseai.apps.concursos.models import Concurso
-from concurseai.apps.trilhas.models import Modulo, QuizGerado, Trilha
+from concurseai.apps.trilhas.models import Modulo, QuizGerado, QuizTentativa, Trilha
 from concurseai.apps.users.models import User
 
 from .service import (
@@ -183,4 +183,43 @@ def gerar_quiz_view(request, modulo_id):
     return Response(
         {"questoes": quiz.questoes},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def salvar_tentativa_view(request, modulo_id):
+    """
+    POST /api/llm/quiz/<modulo_id>/tentativa/
+    Body: {"respostas": {"0": "A", "1": "C", ...}}
+
+    Calcula acertos, persiste a tentativa e retorna acertos + estrelas.
+    O melhor score fica disponível via GET /api/trilhas/<id>/ no campo quiz_estrelas.
+    """
+    try:
+        modulo = Modulo.objects.select_related("trilha__usuario").get(
+            id=modulo_id, trilha__usuario=request.user
+        )
+        quiz = QuizGerado.objects.get(modulo=modulo)
+    except (Modulo.DoesNotExist, QuizGerado.DoesNotExist):
+        return Response({"detail": "Quiz não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    respostas = request.data.get("respostas", {})
+    acertos = sum(
+        1 for i, questao in enumerate(quiz.questoes)
+        if respostas.get(str(i)) == questao.get("gabarito")
+    )
+    total = len(quiz.questoes)
+
+    tentativa = QuizTentativa.objects.create(
+        quiz=quiz,
+        usuario=request.user,
+        acertos=acertos,
+        total=total,
+        respostas=respostas,
+    )
+
+    return Response(
+        {"acertos": acertos, "total": total, "estrelas": tentativa.estrelas},
+        status=status.HTTP_201_CREATED,
     )

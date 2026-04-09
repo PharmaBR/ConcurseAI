@@ -108,44 +108,68 @@ def user_explicar_conteudo(pergunta: str, modulo_nome: str, topico_nome: str = "
 
 def system_gerar_quiz(modulo_nome: str, banca: str = "") -> str:
     """
-    Instrui a LLM a gerar questões de múltipla escolha no estilo da banca.
+    Instrui a LLM a gerar 5 questões cobrindo subtópicos, tópicos e módulo,
+    com dificuldade escalonada (fácil → difícil) no estilo da banca.
     Retorna JSON — usado com client.complete() (response_format=json_object).
     """
     banca_instrucao = ""
     if banca:
-        banca_instrucao = (
-            f"\nAdapte o estilo das questões à banca {banca}: "
-            "CESPE/CEBRASPE usa certo/errado e afirmações com pegadinhas; "
-            "FGV e FCC usam 4-5 alternativas com situações-problema."
-        )
+        estilos = {
+            "CESPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
+            "CEBRASPE": "afirmações certo/errado adaptadas para A/B/C/D, com pegadinhas em exceções e casos-limite.",
+            "FGV": "enunciados com situações-problema e casos práticos, exigindo raciocínio aplicado.",
+            "FCC": "questões diretas de memorização de regras, classificações e definições.",
+            "VUNESP": "questões com foco em aplicação de normas e classificações objetivas.",
+        }
+        estilo = estilos.get(banca.upper(), f"questões no estilo típico da banca {banca}.")
+        banca_instrucao = f"\n\nEstilo da banca {banca}: {estilo}"
 
     return (
-        f"Você é um elaborador de questões de concursos públicos especializado em {modulo_nome}."
-        f"{banca_instrucao}\n\n"
-        "Gere exatamente 5 questões de múltipla escolha (A, B, C, D) com base nos tópicos fornecidos.\n\n"
+        f"Você é um elaborador sênior de questões para concursos públicos brasileiros, "
+        f"especializado em {modulo_nome}.{banca_instrucao}\n\n"
+        "Gere EXATAMENTE 5 questões de múltipla escolha (A, B, C, D) "
+        "seguindo esta DISTRIBUIÇÃO OBRIGATÓRIA de cobertura e dificuldade:\n\n"
+        "Q1 — FÁCIL (subtópico): avalia um subtópico isolado — definição direta, "
+        "conceito básico ou recall simples. Candidato que leu o material acerta.\n"
+        "Q2 — FÁCIL/MÉDIO (subtópico): avalia outro subtópico com leve interpretação — "
+        "reconhecimento com aplicação simples.\n"
+        "Q3 — MÉDIO (tópico): integra 2+ subtópicos do mesmo tópico em situação-problema. "
+        "Exige compreensão, não apenas memorização.\n"
+        "Q4 — MÉDIO/DIFÍCIL (tópico): situação-problema mais elaborada, exceção à regra "
+        "ou contraste entre dois tópicos diferentes.\n"
+        "Q5 — DIFÍCIL (módulo): avalia domínio do módulo inteiro — cruza tópicos distantes, "
+        "edge case, pegadinha típica da banca ou caso especial que pega quem só decorou.\n\n"
         "REGRAS OBRIGATÓRIAS:\n"
         "1. Retorne APENAS JSON válido, sem texto extra.\n"
         '2. Estrutura raiz: {"questoes": [...]}\n'
         "3. Cada questão: "
         '{"enunciado": string, "alternativas": {"A": string, "B": string, "C": string, "D": string}, '
-        '"gabarito": "A"|"B"|"C"|"D", "explicacao": string}\n'
-        "4. O enunciado deve ser claro e testar uma competência específica.\n"
-        "5. Apenas uma alternativa correta; as outras devem ser plausíveis (não óbvias).\n"
-        "6. A explicação deve justificar o gabarito e mencionar por que as outras estão erradas.\n"
-        "7. Varie a posição do gabarito entre A, B, C e D.\n"
-        "8. Nível de dificuldade: intermediário a avançado."
+        '"gabarito": "A"|"B"|"C"|"D", "explicacao": string, '
+        '"dificuldade": "facil"|"medio"|"dificil", "nivel": "subtopico"|"topico"|"modulo"}\n'
+        "4. Apenas uma alternativa correta; as demais devem ser plausíveis (não óbvias).\n"
+        "5. A explicação justifica o gabarito E menciona por que cada distrator está errado.\n"
+        "6. Varie a posição do gabarito (não repita a mesma letra mais de 2 vezes).\n"
+        "7. Os enunciados devem ser autocontidos — não referencie 'o texto acima' ou 'a lei X'."
     )
 
 
 def user_gerar_quiz(modulo_nome: str, topicos: list) -> str:
-    """Formata os tópicos do módulo para geração do quiz."""
-    topicos_texto = "\n".join(
-        f"- {t['nome'] if isinstance(t, dict) else t}" for t in topicos[:10]
-    )
+    """Formata tópicos e subtópicos do módulo para cobertura granular no quiz."""
+    linhas = []
+    for t in topicos[:8]:
+        if isinstance(t, dict):
+            linhas.append(f"Tópico: {t['nome']}")
+            for sub in t.get("subtopicos", [])[:5]:
+                linhas.append(f"  • {sub}")
+        else:
+            linhas.append(f"Tópico: {t}")
+
+    conteudo = "\n".join(linhas) if linhas else modulo_nome
+
     return (
         f"Módulo: {modulo_nome}\n\n"
-        f"Tópicos a cobrir:\n{topicos_texto}\n\n"
-        "Gere 5 questões de múltipla escolha cobrindo esses tópicos."
+        f"Conteúdo disponível (tópicos e subtópicos):\n{conteudo}\n\n"
+        "Gere as 5 questões respeitando a distribuição de cobertura e dificuldade solicitada."
     )
 
 

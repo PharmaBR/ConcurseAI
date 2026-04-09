@@ -9,22 +9,54 @@ interface Questao {
   alternativas: { A: string; B: string; C: string; D: string };
   gabarito: "A" | "B" | "C" | "D";
   explicacao: string;
+  dificuldade?: "facil" | "medio" | "dificil";
+  nivel?: "subtopico" | "topico" | "modulo";
 }
 
 interface Props {
   moduloId: number;
   moduloNome: string;
   onFechar: () => void;
+  onConcluido?: (estrelas: number) => void;
 }
 
-type Fase = "carregando" | "quiz" | "resultado" | "erro";
+type Fase = "carregando" | "quiz" | "salvando" | "resultado" | "erro";
 
-export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
+const DIFICULDADE_LABEL: Record<string, string> = {
+  facil: "Fácil",
+  medio: "Médio",
+  dificil: "Difícil",
+};
+const DIFICULDADE_COLOR: Record<string, string> = {
+  facil: "bg-green-100 text-green-700",
+  medio: "bg-yellow-100 text-yellow-700",
+  dificil: "bg-red-100 text-red-700",
+};
+const NIVEL_LABEL: Record<string, string> = {
+  subtopico: "Subtópico",
+  topico: "Tópico",
+  modulo: "Módulo",
+};
+
+function Estrelas({ total, preenchidas }: { total: number; preenchidas: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {Array.from({ length: total }).map((_, i) => (
+        <span key={i} className={`text-xl ${i < preenchidas ? "text-yellow-400" : "text-gray-200"}`}>
+          ★
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function QuizModal({ moduloId, moduloNome, onFechar, onConcluido }: Props) {
   const [fase, setFase] = useState<Fase>("carregando");
   const [questoes, setQuestoes] = useState<Questao[]>([]);
   const [atual, setAtual] = useState(0);
   const [respostas, setRespostas] = useState<Record<number, string>>({});
   const [mostrarExplicacao, setMostrarExplicacao] = useState(false);
+  const [resultado, setResultado] = useState<{ acertos: number; total: number; estrelas: number } | null>(null);
   const [erro, setErro] = useState("");
 
   useEffect(() => {
@@ -47,7 +79,6 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
   const questaoAtual = questoes[atual];
   const respondida = respostas[atual] !== undefined;
   const acertou = respondida && respostas[atual] === questaoAtual?.gabarito;
-  const totalAcertos = questoes.filter((q, i) => respostas[i] === q.gabarito).length;
 
   function responder(letra: string) {
     if (respondida) return;
@@ -55,16 +86,45 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
     setMostrarExplicacao(true);
   }
 
-  function proxima() {
+  async function proxima() {
     setMostrarExplicacao(false);
-    if (atual + 1 < questoes.length) setAtual((v) => v + 1);
-    else setFase("resultado");
+    if (atual + 1 < questoes.length) {
+      setAtual((v) => v + 1);
+    } else {
+      await salvarTentativa();
+    }
+  }
+
+  async function salvarTentativa() {
+    setFase("salvando");
+    const token = localStorage.getItem("access_token");
+    try {
+      const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/tentativa/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          respostas: Object.fromEntries(
+            Object.entries(respostas).map(([k, v]) => [String(k), v])
+          ),
+        }),
+      });
+      const data = await res.json();
+      setResultado(data);
+      onConcluido?.(data.estrelas);
+    } catch {
+      // mesmo com erro, mostra resultado local
+      const acertos = questoes.filter((q, i) => respostas[i] === q.gabarito).length;
+      setResultado({ acertos, total: questoes.length, estrelas: acertos });
+    } finally {
+      setFase("resultado");
+    }
   }
 
   function reiniciar() {
     setAtual(0);
     setRespostas({});
     setMostrarExplicacao(false);
+    setResultado(null);
     setFase("quiz");
   }
 
@@ -72,7 +132,15 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
     if (!respondida) return "hover:bg-blue-50 hover:border-blue-300 cursor-pointer";
     if (letra === questaoAtual.gabarito) return "bg-green-50 border-green-400 text-green-800";
     if (letra === respostas[atual]) return "bg-red-50 border-red-400 text-red-800";
-    return "opacity-50";
+    return "opacity-40";
+  };
+
+  const mensagemResultado = (estrelas: number) => {
+    if (estrelas === 5) return "Perfeito! Domínio total do módulo. ✨";
+    if (estrelas === 4) return "Excelente! Apenas um detalhe a revisar.";
+    if (estrelas === 3) return "Bom progresso — revise os erros antes de avançar.";
+    if (estrelas === 2) return "Estude mais o módulo antes de continuar.";
+    return "Revise todo o módulo e refaça o quiz.";
   };
 
   return (
@@ -80,9 +148,9 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b">
+        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Quiz</p>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Quiz</p>
             <h2 className="font-semibold text-gray-800 leading-tight">{moduloNome}</h2>
           </div>
           <button onClick={onFechar} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
@@ -92,10 +160,12 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
         <div className="overflow-y-auto flex-1 px-5 py-4">
 
           {/* Carregando */}
-          {fase === "carregando" && (
+          {(fase === "carregando" || fase === "salvando") && (
             <div className="flex flex-col items-center gap-3 py-10 text-gray-400">
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
-              <p className="text-sm">Gerando questões com IA…</p>
+              <p className="text-sm">
+                {fase === "carregando" ? "Gerando questões com IA…" : "Salvando resultado…"}
+              </p>
             </div>
           )}
 
@@ -110,12 +180,23 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
               {/* Progresso */}
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>Questão {atual + 1} de {questoes.length}</span>
-                <span>{Object.keys(respostas).length} respondidas</span>
+                <div className="flex gap-1.5">
+                  {questaoAtual.dificuldade && (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${DIFICULDADE_COLOR[questaoAtual.dificuldade] ?? ""}`}>
+                      {DIFICULDADE_LABEL[questaoAtual.dificuldade]}
+                    </span>
+                  )}
+                  {questaoAtual.nivel && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
+                      {NIVEL_LABEL[questaoAtual.nivel]}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-500 rounded-full transition-all"
-                  style={{ width: `${((atual) / questoes.length) * 100}%` }}
+                  style={{ width: `${(atual / questoes.length) * 100}%` }}
                 />
               </div>
 
@@ -143,29 +224,40 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
               {/* Explicação */}
               {mostrarExplicacao && (
                 <div className={`rounded-lg px-3 py-2.5 text-sm leading-relaxed ${acertou ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
-                  <p className="font-semibold mb-1">{acertou ? "✓ Correto!" : `✗ Errado — gabarito: ${questaoAtual.gabarito}`}</p>
+                  <p className="font-semibold mb-1">
+                    {acertou ? "✓ Correto!" : `✗ Errado — gabarito: ${questaoAtual.gabarito}`}
+                  </p>
                   <p>{questaoAtual.explicacao}</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Resultado final */}
-          {fase === "resultado" && (
-            <div className="flex flex-col items-center gap-4 py-6 text-center">
-              <div className={`text-5xl font-bold ${totalAcertos >= 4 ? "text-green-500" : totalAcertos >= 3 ? "text-yellow-500" : "text-red-500"}`}>
-                {totalAcertos}/{questoes.length}
+          {/* Resultado */}
+          {fase === "resultado" && resultado && (
+            <div className="flex flex-col items-center gap-5 py-4 text-center">
+              <Estrelas total={5} preenchidas={resultado.estrelas} />
+              <div>
+                <p className="text-3xl font-bold text-gray-800">
+                  {resultado.acertos}/{resultado.total}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">{mensagemResultado(resultado.estrelas)}</p>
               </div>
-              <p className="text-gray-600 text-sm">
-                {totalAcertos === questoes.length
-                  ? "Perfeito! Domínio total do módulo."
-                  : totalAcertos >= 4
-                  ? "Muito bom! Apenas pequenas lacunas."
-                  : totalAcertos >= 3
-                  ? "Bom progresso, mas revise os erros."
-                  : "Revise o módulo antes de continuar."}
-              </p>
-              <div className="flex gap-2 w-full">
+
+              {/* Resumo por questão */}
+              <div className="w-full flex gap-1.5 justify-center">
+                {questoes.map((q, i) => (
+                  <div
+                    key={i}
+                    title={`Q${i + 1}: ${respostas[i] === q.gabarito ? "Acertou" : "Errou"}`}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${respostas[i] === q.gabarito ? "bg-green-500" : "bg-red-400"}`}
+                  >
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 w-full pt-2">
                 <button
                   onClick={reiniciar}
                   className="flex-1 text-sm border border-blue-600 text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
@@ -183,9 +275,9 @@ export function QuizModal({ moduloId, moduloNome, onFechar }: Props) {
           )}
         </div>
 
-        {/* Footer — botão Próxima */}
+        {/* Footer — Próxima / Ver resultado */}
         {fase === "quiz" && respondida && (
-          <div className="px-5 py-4 border-t">
+          <div className="px-5 py-4 border-t shrink-0">
             <button
               onClick={proxima}
               className="w-full text-sm bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
