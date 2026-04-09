@@ -119,6 +119,9 @@ async def gerar_quiz_para_modulo(
     if "questoes" not in data or not isinstance(data["questoes"], list):
         raise LLMServiceError("Resposta da LLM não contém o campo 'questoes' esperado.")
 
+    # Garante exatamente 5 questões independente do que a LLM retornou
+    data["questoes"] = data["questoes"][:5]
+
     return data
 
 
