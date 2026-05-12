@@ -4,6 +4,20 @@
 
 import { ModuloCard } from "./ModuloCard";
 
+interface ProficienciaEntry {
+  melhor_acertos: number;
+  total: number;
+  score: number;
+  dominado: boolean;
+  tentativas: number;
+}
+
+interface Proficiencia {
+  modulo: ProficienciaEntry | null;
+  topicos: Record<string, ProficienciaEntry>;
+  subtopicos: Record<string, ProficienciaEntry>;
+}
+
 interface Modulo {
   id: number;
   nome: string;
@@ -12,7 +26,7 @@ interface Modulo {
   status: "nao_iniciado" | "em_andamento" | "concluido";
   progresso: number;
   topicos: string[];
-  proficiencia?: { modulo: unknown; topicos: Record<string, unknown>; subtopicos: Record<string, unknown> } | null;
+  proficiencia?: Proficiencia | null;
   flashcards_pendentes?: number;
 }
 
