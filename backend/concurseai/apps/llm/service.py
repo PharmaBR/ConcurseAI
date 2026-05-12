@@ -182,7 +182,12 @@ async def analisar_lacunas_e_gerar_flashcards(tentativa, modulo_nome: str) -> di
 
 
 async def stream_explicacao(
-    usuario, pergunta: str, modulo_nome: str, topico_nome: str = "", topicos: list | None = None
+    usuario,
+    pergunta: str,
+    modulo_nome: str,
+    topico_nome: str = "",
+    topicos: list | None = None,
+    historico: list | None = None,
 ):
     """
     Gerador assíncrono de tokens para o chat de explicação por módulo.
@@ -195,7 +200,7 @@ async def stream_explicacao(
     user_message = prompts.user_explicar_conteudo(pergunta, modulo_nome, topico_nome)
 
     try:
-        async for token in client.stream_chat(system_prompt, user_message):
+        async for token in client.stream_chat(system_prompt, user_message, historico=historico):
             yield token
     except Exception as exc:
         logger.exception("Erro no stream LLM para usuário %s", usuario.id)

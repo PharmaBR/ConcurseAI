@@ -52,28 +52,42 @@ async def complete(system_prompt: str, user_message: str, model: str | None = No
     return content
 
 
-async def stream_chat(system_prompt: str, user_message: str, model: str | None = None):
+async def stream_chat(
+    system_prompt: str,
+    user_message: str,
+    historico: list[dict] | None = None,
+    model: str | None = None,
+):
     """
     Gerador assíncrono de tokens para uso com StreamingHttpResponse (SSE).
     Ao contrário de complete(), não usa response_format=json_object — retorna texto livre.
+
+    `historico`: lista de mensagens anteriores no formato OpenAI
+                 [{"role": "user"|"assistant", "content": str}, ...]
+                 Limitada aos últimos MAX_HISTORY_MESSAGES pares para controlar tokens.
     """
+    MAX_HISTORY_MESSAGES = 10  # 5 turnos completos (user + assistant)
     resolved_model = model or settings.OPENAI_MODEL
     client = get_client()
 
+    # Monta o array de mensagens: system + histórico (truncado) + nova pergunta
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    if historico:
+        messages += historico[-MAX_HISTORY_MESSAGES:]
+    messages.append({"role": "user", "content": user_message})
+
     logger.info(
-        "LLM stream request | model=%s | system_len=%d | user_len=%d",
+        "LLM stream request | model=%s | system_len=%d | history=%d | user_len=%d",
         resolved_model,
         len(system_prompt),
+        len(historico) if historico else 0,
         len(user_message),
     )
 
     stream = await client.chat.completions.create(
         model=resolved_model,
         stream=True,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
+        messages=messages,
     )
     async for chunk in stream:
         token = chunk.choices[0].delta.content if chunk.choices else None

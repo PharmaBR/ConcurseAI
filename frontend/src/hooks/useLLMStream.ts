@@ -4,16 +4,24 @@ import { useState, useCallback } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export interface MensagemChat {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface UseLLMStreamOptions {
   moduloNome: string;
   topicoNome?: string;
-  topicos?: unknown[];  // tópicos e subtópicos do módulo para restringir o escopo
+  topicos?: unknown[];
 }
 
 export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOptions) {
-  const [resposta, setResposta] = useState("");
+  const [historico, setHistorico] = useState<MensagemChat[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Mantém compatibilidade: expõe a última resposta do assistente
+  const resposta = historico.filter((m) => m.role === "assistant").at(-1)?.content ?? "";
 
   const enviar = useCallback(
     async (pergunta: string) => {
@@ -23,9 +31,14 @@ export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOp
         return;
       }
 
-      setResposta("");
+      // Adiciona a mensagem do usuário ao histórico imediatamente
+      const novoHistorico: MensagemChat[] = [...historico, { role: "user", content: pergunta }];
+      setHistorico(novoHistorico);
       setErro(null);
       setStreaming(true);
+
+      // Placeholder da resposta do assistente (será preenchida em streaming)
+      setHistorico((prev) => [...prev, { role: "assistant", content: "" }]);
 
       try {
         const res = await fetch(`${API_URL}/api/llm/explicar/`, {
@@ -39,12 +52,16 @@ export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOp
             modulo_nome: moduloNome,
             topico_nome: topicoNome ?? "",
             ...(topicos && topicos.length > 0 && { topicos }),
+            // Envia o histórico anterior (sem a mensagem atual do usuário)
+            ...(historico.length > 0 && { historico }),
           }),
         });
 
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => ({}));
           setErro((data as { detail?: string }).detail ?? "Erro ao conectar com a IA.");
+          // Remove o placeholder vazio do assistente
+          setHistorico((prev) => prev.slice(0, -1));
           setStreaming(false);
           return;
         }
@@ -58,8 +75,6 @@ export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOp
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-
-          // SSE events são separados por \n\n
           const events = buffer.split("\n\n");
           buffer = events.pop() ?? "";
 
@@ -73,7 +88,15 @@ export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOp
                 erro?: string;
               };
               if (json.token) {
-                setResposta((prev) => prev + json.token);
+                // Acumula token na última mensagem do assistente
+                setHistorico((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: updated[updated.length - 1].content + json.token,
+                  };
+                  return updated;
+                });
               } else if (json.erro) {
                 setErro(json.erro);
               }
@@ -84,17 +107,18 @@ export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOp
         }
       } catch {
         setErro("Erro de conexão com o servidor.");
+        setHistorico((prev) => prev.slice(0, -1));
       } finally {
         setStreaming(false);
       }
     },
-    [moduloNome, topicoNome, topicos]
+    [moduloNome, topicoNome, topicos, historico]
   );
 
   const limpar = useCallback(() => {
-    setResposta("");
+    setHistorico([]);
     setErro(null);
   }, []);
 
-  return { resposta, streaming, erro, enviar, limpar };
+  return { historico, resposta, streaming, erro, enviar, limpar };
 }

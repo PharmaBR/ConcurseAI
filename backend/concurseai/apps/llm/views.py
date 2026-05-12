@@ -126,7 +126,8 @@ async def explicar_stream_view(request):
         pergunta = body.get("pergunta", "").strip()
         modulo_nome = body.get("modulo_nome", "").strip()
         topico_nome = body.get("topico_nome", "").strip()
-        topicos = body.get("topicos") or None  # lista de tópicos/subtópicos do módulo
+        topicos = body.get("topicos") or None        # tópicos/subtópicos do módulo (escopo)
+        historico = body.get("historico") or None    # mensagens anteriores [{role, content}]
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({"detail": "Corpo da requisição inválido."}, status=400)
 
@@ -137,7 +138,9 @@ async def explicar_stream_view(request):
 
     async def event_stream():
         try:
-            async for token in stream_explicacao(usuario, pergunta, modulo_nome, topico_nome, topicos=topicos):
+            async for token in stream_explicacao(
+            usuario, pergunta, modulo_nome, topico_nome, topicos=topicos, historico=historico
+        ):
                 yield f"event: message\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
             yield f"event: fim\ndata: {json.dumps({'fim': True})}\n\n"
         except SemCreditoError as exc:
