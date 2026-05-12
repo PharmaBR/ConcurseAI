@@ -6,11 +6,12 @@ import { useLLMStream } from "@/hooks/useLLMStream";
 
 interface Props {
   moduloNome: string;
+  topicos?: unknown[];
 }
 
-export function ChatExplicacao({ moduloNome }: Props) {
+export function ChatExplicacao({ moduloNome, topicos }: Props) {
   const [pergunta, setPergunta] = useState("");
-  const { resposta, streaming, erro, enviar, limpar } = useLLMStream({ moduloNome });
+  const { resposta, streaming, erro, enviar, limpar } = useLLMStream({ moduloNome, topicos });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +51,7 @@ export function ChatExplicacao({ moduloNome }: Props) {
           type="text"
           value={pergunta}
           onChange={(e) => setPergunta(e.target.value)}
-          placeholder={`Dúvida sobre ${moduloNome}...`}
+          placeholder={`Dúvida sobre os tópicos de ${moduloNome}...`}
           disabled={streaming}
           className="flex-1 text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
         />

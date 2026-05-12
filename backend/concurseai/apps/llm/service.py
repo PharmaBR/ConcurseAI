@@ -181,7 +181,9 @@ async def analisar_lacunas_e_gerar_flashcards(tentativa, modulo_nome: str) -> di
     return data
 
 
-async def stream_explicacao(usuario, pergunta: str, modulo_nome: str, topico_nome: str = ""):
+async def stream_explicacao(
+    usuario, pergunta: str, modulo_nome: str, topico_nome: str = "", topicos: list | None = None
+):
     """
     Gerador assíncrono de tokens para o chat de explicação por módulo.
     Faz yield de cada token recebido da LLM para uso com StreamingHttpResponse (SSE).
@@ -189,7 +191,7 @@ async def stream_explicacao(usuario, pergunta: str, modulo_nome: str, topico_nom
     # TODO FASE 2: adicionar verificação e débito de créditos quando o modelo de
     # planos for implementado (usuario.tem_credito_llm, F expression async-safe).
     """
-    system_prompt = prompts.system_explicar_conteudo(modulo_nome)
+    system_prompt = prompts.system_explicar_conteudo(modulo_nome, topicos=topicos)
     user_message = prompts.user_explicar_conteudo(pergunta, modulo_nome, topico_nome)
 
     try:

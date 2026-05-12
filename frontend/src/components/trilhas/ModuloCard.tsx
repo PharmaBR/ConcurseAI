@@ -401,7 +401,7 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         </button>
       </div>
 
-      {chatAberto && <ChatExplicacao moduloNome={modulo.nome} />}
+      {chatAberto && <ChatExplicacao moduloNome={modulo.nome} topicos={modulo.topicos} />}
 
       {quizAberto && (
         <QuizModal

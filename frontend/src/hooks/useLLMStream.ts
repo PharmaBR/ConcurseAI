@@ -7,9 +7,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 interface UseLLMStreamOptions {
   moduloNome: string;
   topicoNome?: string;
+  topicos?: unknown[];  // tópicos e subtópicos do módulo para restringir o escopo
 }
 
-export function useLLMStream({ moduloNome, topicoNome }: UseLLMStreamOptions) {
+export function useLLMStream({ moduloNome, topicoNome, topicos }: UseLLMStreamOptions) {
   const [resposta, setResposta] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export function useLLMStream({ moduloNome, topicoNome }: UseLLMStreamOptions) {
             pergunta,
             modulo_nome: moduloNome,
             topico_nome: topicoNome ?? "",
+            ...(topicos && topicos.length > 0 && { topicos }),
           }),
         });
 
@@ -86,7 +88,7 @@ export function useLLMStream({ moduloNome, topicoNome }: UseLLMStreamOptions) {
         setStreaming(false);
       }
     },
-    [moduloNome, topicoNome]
+    [moduloNome, topicoNome, topicos]
   );
 
   const limpar = useCallback(() => {
