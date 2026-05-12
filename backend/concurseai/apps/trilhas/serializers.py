@@ -1,6 +1,19 @@
 from rest_framework import serializers
 
+from concurseai.apps.concursos.models import Concurso
 from .models import Flashcard, LacunaConceitual, Modulo, Proficiencia, Trilha
+
+
+class ConcursoResumoSerializer(serializers.ModelSerializer):
+    """Resumo do concurso para exibição no cabeçalho da trilha."""
+    banca_sigla = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Concurso
+        fields = ("id", "orgao", "cargo", "banca_sigla", "status")
+
+    def get_banca_sigla(self, obj) -> str:
+        return obj.banca.sigla if obj.banca else ""
 
 
 class ModuloSerializer(serializers.ModelSerializer):
@@ -81,6 +94,7 @@ class ModuloSerializer(serializers.ModelSerializer):
 class TrilhaSerializer(serializers.ModelSerializer):
     modulos = ModuloSerializer(many=True, read_only=True)
     progresso = serializers.FloatField(read_only=True)
+    concurso = ConcursoResumoSerializer(read_only=True)
 
     class Meta:
         model = Trilha

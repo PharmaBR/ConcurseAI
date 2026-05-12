@@ -315,56 +315,62 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
         </div>
       )}
 
-      {/* Ações IA */}
-      <div className="flex items-center gap-3 mt-1 flex-wrap">
+      {/* ── Ações IA — bloco visual proeminente ── */}
+      <div className="grid grid-cols-3 gap-2 mt-2">
+
+        {/* Chat IA */}
         <button
           type="button"
           onClick={() => setChatAberto((v) => !v)}
-          className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+          className={`flex flex-col items-center gap-1 rounded-xl px-2 py-3 border-2 transition-colors ${
+            chatAberto
+              ? "border-blue-400 bg-blue-100"
+              : "border-blue-100 bg-blue-50 hover:bg-blue-100 hover:border-blue-300"
+          }`}
         >
-          {chatAberto ? "▲ Fechar chat" : "💬 Perguntar à IA"}
+          <span className="text-lg leading-none">💬</span>
+          <span className="text-xs font-semibold text-blue-700">Chat IA</span>
+          <span className="text-[10px] text-blue-400 leading-tight text-center">
+            {chatAberto ? "Fechar" : "Tire dúvidas"}
+          </span>
         </button>
+
+        {/* Quiz */}
         <button
           type="button"
           onClick={() => setQuizAberto(true)}
-          className="text-xs text-purple-600 hover:text-purple-800 transition-colors"
+          className="flex flex-col items-center gap-1 rounded-xl px-2 py-3 border-2 border-purple-100 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-colors"
         >
-          📝 {quizEstrelas !== null ? "Refazer quiz" : "Fazer quiz"}
+          <span className="text-lg leading-none">📝</span>
+          <span className="text-xs font-semibold text-purple-700">Quiz</span>
+          {quizEstrelas !== null ? (
+            <span className="flex gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span key={i} className={`text-[10px] leading-none ${i < quizEstrelas! ? "text-yellow-400" : "text-gray-300"}`}>★</span>
+              ))}
+            </span>
+          ) : (
+            <span className="text-[10px] text-purple-400 leading-tight text-center">Testar nível</span>
+          )}
         </button>
 
-        {/* Botão de flashcards — aparece sempre que houve quiz (proficiência existe) */}
-        {(proficiencia.modulo !== null ||
-          Object.keys(proficiencia.topicos).length > 0 ||
-          Object.keys(proficiencia.subtopicos).length > 0 ||
-          flashcardsPendentes > 0) && (
-          <button
-            type="button"
-            onClick={() => setFlashcardAberto(true)}
-            className="text-xs text-orange-600 hover:text-orange-800 transition-colors flex items-center gap-1"
-          >
-            📚
-            {flashcardsPendentes > 0 && (
-              <span className="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
-                {flashcardsPendentes}
-              </span>
-            )}
-            Flashcards
-          </button>
-        )}
-
-        {/* Badge de estrelas do quiz de módulo */}
-        {quizEstrelas !== null && (
-          <span className="flex items-center gap-0.5 ml-auto">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <span
-                key={i}
-                className={`text-sm leading-none ${i < quizEstrelas! ? "text-yellow-400" : "text-gray-200"}`}
-              >
-                ★
-              </span>
-            ))}
+        {/* Flashcards */}
+        <button
+          type="button"
+          onClick={() => setFlashcardAberto(true)}
+          className="relative flex flex-col items-center gap-1 rounded-xl px-2 py-3 border-2 border-orange-100 bg-orange-50 hover:bg-orange-100 hover:border-orange-300 transition-colors"
+        >
+          {flashcardsPendentes > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">
+              {flashcardsPendentes}
+            </span>
+          )}
+          <span className="text-lg leading-none">📚</span>
+          <span className="text-xs font-semibold text-orange-700">Flashcards</span>
+          <span className="text-[10px] text-orange-400 leading-tight text-center">
+            {flashcardsPendentes > 0 ? `${flashcardsPendentes} para revisar` : "Fixar conceitos"}
           </span>
-        )}
+        </button>
       </div>
 
       {chatAberto && <ChatExplicacao moduloNome={modulo.nome} />}

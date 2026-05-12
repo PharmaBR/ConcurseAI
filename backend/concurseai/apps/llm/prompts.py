@@ -258,7 +258,16 @@ def system_analisar_lacunas(modulo_nome: str) -> str:
         "4. Use 'subtopico_ref' que corresponda ao subtópico listado na questão ou ao mais próximo.\n"
         "5. O flashcard_verso deve ser didático — serve para o candidato APRENDER, não só verificar.\n"
         "6. Foque no GAP conceitual: o que o candidato precisaria saber para acertar essa questão?\n"
-        "7. Gere UMA lacuna por questão errada — não agrupe nem divida."
+        "7. Gere UMA lacuna por questão errada — não agrupe nem divida.\n\n"
+        "REGRAS CRÍTICAS PARA O FLASHCARD (violá-las torna o card inutilizável):\n"
+        "8. O flashcard deve ser COMPLETAMENTE AUTOCONTIDO — o candidato verá APENAS a frente e o "
+        "verso, sem acesso ao enunciado, às alternativas ou à explicação do quiz original.\n"
+        "9. NUNCA referencie 'a alternativa A', 'o item B', 'conforme o enunciado', "
+        "'a questão dizia', 'segundo o texto acima' ou qualquer elemento externo ao próprio card.\n"
+        "10. A frente deve ser uma pergunta conceitual direta sobre o tema identificado — "
+        "não uma reformulação do enunciado do quiz.\n"
+        "11. O verso deve responder à frente de forma autossuficiente, sem depender de nenhum "
+        "contexto externo. Quem lê apenas o card deve conseguir aprender o conceito do zero."
     )
 
 

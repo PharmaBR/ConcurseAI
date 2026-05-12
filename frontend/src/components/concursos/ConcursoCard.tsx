@@ -31,6 +31,7 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
   const router = useRouter();
   const [gerando, setGerando] = useState(false);
   const [segundos, setSegundos] = useState(0);
+  const [erroGerar, setErroGerar] = useState<string | null>(null);
 
   async function handleToggleSalvo() {
     if (salvo && savedId !== undefined) {
@@ -48,6 +49,7 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
     }
 
     setGerando(true);
+    setErroGerar(null);
     setSegundos(0);
     const intervalo = setInterval(() => setSegundos((s) => s + 1), 1000);
 
@@ -62,8 +64,10 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
         router.push(`/trilha/${data.trilha_id}`);
       } else {
         const data = await res.json();
-        alert(data.detail || "Erro ao gerar trilha.");
+        setErroGerar(data.detail || "Erro ao gerar trilha. Tente novamente.");
       }
+    } catch {
+      setErroGerar("Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
       clearInterval(intervalo);
       setGerando(false);
@@ -106,45 +110,65 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
         </p>
       )}
 
+      {/* Erro inline (substitui alert()) */}
+      {erroGerar && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+          <span className="shrink-0">⚠️</span>
+          <span>{erroGerar}</span>
+        </div>
+      )}
+
       <div className="flex gap-2 mt-1">
+        {/* CTA principal — destaque visual maior */}
         {trilhaId ? (
           <button
             onClick={() => router.push(`/trilha/${trilhaId}`)}
-            className="flex-1 bg-green-600 text-white text-sm py-1.5 rounded hover:bg-green-700 transition-colors"
+            className="flex-1 bg-green-600 text-white text-sm py-2 rounded-lg font-medium hover:bg-green-700 transition-colors shadow-sm"
           >
-            Ver trilha
+            ▶ Continuar estudando
           </button>
         ) : (
           <button
             onClick={handleGerarTrilha}
             disabled={gerando}
-            className={`flex-1 text-white text-sm py-1.5 rounded transition-colors ${
+            className={`flex-1 text-white text-sm py-2 rounded-lg font-medium transition-colors shadow-sm ${
               gerando
                 ? "bg-blue-400 cursor-not-allowed"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {gerando ? `Gerando trilha... ${segundos}s` : "Gerar trilha"}
+            {gerando ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                Gerando trilha… {segundos}s
+              </span>
+            ) : (
+              "✨ Gerar trilha de estudos"
+            )}
           </button>
         )}
+
+        {/* Ações secundárias — menor destaque */}
         <button
           onClick={handleToggleSalvo}
-          className={`px-3 py-1.5 text-sm rounded border ${
+          title={salvo ? "Remover dos salvos" : "Salvar concurso"}
+          className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
             salvo
-              ? "border-red-300 text-red-600 hover:bg-red-50"
-              : "border-gray-300 text-gray-600 hover:bg-gray-50"
+              ? "border-red-200 text-red-500 hover:bg-red-50"
+              : "border-gray-200 text-gray-500 hover:bg-gray-50"
           }`}
         >
-          {salvo ? "Remover" : "Salvar"}
+          {salvo ? "♥" : "♡"}
         </button>
         {concurso.edital_url && (
           <a
             href={concurso.edital_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1.5 text-sm rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+            title="Abrir edital original"
+            className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
           >
-            Edital
+            PDF
           </a>
         )}
       </div>
