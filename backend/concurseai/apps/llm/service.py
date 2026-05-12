@@ -66,6 +66,7 @@ async def gerar_quiz_para_modulo(
     tipo: str = "modulo",
     referencia: str = "",
     topico_nome: str = "",
+    subtopicos_filtro: list | None = None,
 ) -> dict:
     """
     Gera 5 questões para um módulo via LLM com suporte a três níveis progressivos:
@@ -98,11 +99,15 @@ async def gerar_quiz_para_modulo(
                 subtopicos = t.get("subtopicos", [])
                 break
         system_prompt = prompts.system_gerar_quiz_topico(modulo.nome, referencia, banca=banca)
-        user_message = prompts.user_gerar_quiz_topico(modulo.nome, referencia, subtopicos)
+        user_message = prompts.user_gerar_quiz_topico(
+            modulo.nome, referencia, subtopicos, subtopicos_filtro=subtopicos_filtro
+        )
 
     else:  # modulo
         system_prompt = prompts.system_gerar_quiz_modulo(modulo.nome, banca=banca)
-        user_message = prompts.user_gerar_quiz_modulo(modulo.nome, modulo.topicos)
+        user_message = prompts.user_gerar_quiz_modulo(
+            modulo.nome, modulo.topicos, subtopicos_filtro=subtopicos_filtro
+        )
 
     try:
         raw = await client.complete(system_prompt, user_message)

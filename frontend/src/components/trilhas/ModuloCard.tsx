@@ -135,6 +135,11 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
   const [chatAberto, setChatAberto] = useState(false);
   const [quizAberto, setQuizAberto] = useState(false);
   const [flashcardAberto, setFlashcardAberto] = useState(false);
+  const [quizAutoStart, setQuizAutoStart] = useState<{
+    tipo: "subtopico" | "topico" | "modulo";
+    referencia: string;
+    topico_nome?: string;
+  } | null>(null);
   const [flashcardsPendentes, setFlashcardsPendentes] = useState(
     modulo.flashcards_pendentes ?? 0
   );
@@ -155,6 +160,18 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
 
   function toggleExpanded(i: number) {
     setExpanded((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
+  }
+
+  // Subtópicos com checkbox marcado — passados ao QuizModal para o toggle "só o que estudei"
+  const subtopicosEstudados: string[] = nested
+    ? (modulo.topicos as TopicoAninhado[]).flatMap((t, ti) =>
+        t.subtopicos.filter((_, si) => checked[topicoOffset(ti) + si])
+      )
+    : (modulo.topicos as string[]).filter((_, i) => checked[i]);
+
+  function abrirQuizSubtopico(subtopico: string, topicoNome: string) {
+    setQuizAutoStart({ tipo: "subtopico", referencia: subtopico, topico_nome: topicoNome });
+    setQuizAberto(true);
   }
 
   function handleQuizConcluido(
@@ -259,19 +276,30 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
                       const subProfEntry = proficiencia.subtopicos[sub];
                       return (
                         <li key={si}>
-                          <label className="flex items-start gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              checked={checked[idx] ?? false}
-                              onChange={() => handleToggle(idx)}
-                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 cursor-pointer"
-                            />
-                            <span className={`text-sm leading-snug flex-1 ${checked[idx] ? "line-through text-gray-400" : "text-gray-600 group-hover:text-gray-900"}`}>
-                              {sub}
-                            </span>
+                          <div className="flex items-start gap-2 group">
+                            <label className="flex items-start gap-2 cursor-pointer flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked[idx] ?? false}
+                                onChange={() => handleToggle(idx)}
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 cursor-pointer"
+                              />
+                              <span className={`text-sm leading-snug flex-1 ${checked[idx] ? "line-through text-gray-400" : "text-gray-600 group-hover:text-gray-900"}`}>
+                                {sub}
+                              </span>
+                            </label>
+                            {/* Botão quiz direto por subtópico */}
+                            <button
+                              type="button"
+                              onClick={() => abrirQuizSubtopico(sub, topico.nome)}
+                              title={`Quiz: ${sub}`}
+                              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-purple-500 hover:text-purple-700 border border-purple-200 hover:border-purple-400 rounded px-1 py-0.5 leading-none"
+                            >
+                              📝
+                            </button>
                             {/* Bolinha de proficiência do subtópico */}
                             <ProfDot entry={subProfEntry} label={sub} />
-                          </label>
+                          </div>
                         </li>
                       );
                     })}
@@ -381,7 +409,9 @@ export function ModuloCard({ modulo, onAvancar }: Props) {
           moduloNome={modulo.nome}
           topicos={modulo.topicos}
           proficiencia={proficiencia}
-          onFechar={() => setQuizAberto(false)}
+          subtopicosEstudados={subtopicosEstudados}
+          autoStart={quizAutoStart ?? undefined}
+          onFechar={() => { setQuizAberto(false); setQuizAutoStart(null); }}
           onConcluido={handleQuizConcluido}
         />
       )}

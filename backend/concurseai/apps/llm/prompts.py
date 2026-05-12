@@ -187,12 +187,25 @@ def system_gerar_quiz_topico(modulo_nome: str, topico_nome: str, banca: str = ""
     )
 
 
-def user_gerar_quiz_topico(modulo_nome: str, topico_nome: str, subtopicos: list) -> str:
+def user_gerar_quiz_topico(
+    modulo_nome: str, topico_nome: str, subtopicos: list, subtopicos_filtro: list | None = None
+) -> str:
     """Formata o tópico e seus subtópicos para a LLM gerar o quiz de nível 2."""
     linhas = [f"Módulo: {modulo_nome}", f"Tópico: {topico_nome}", "", "Subtópicos disponíveis:"]
     for sub in subtopicos[:8]:
         linhas.append(f"  • {sub}")
-    return "\n".join(linhas) + "\n\nGere as 5 questões integrando os subtópicos acima."
+
+    instrucao = "Gere as 5 questões integrando os subtópicos acima."
+    if subtopicos_filtro:
+        linhas += ["", "RESTRIÇÃO: O candidato estudou apenas os seguintes subtópicos:"]
+        for sub in subtopicos_filtro:
+            linhas.append(f"  ✓ {sub}")
+        instrucao = (
+            "Gere as 5 questões cobrindo SOMENTE os subtópicos marcados com ✓ acima. "
+            "Não inclua conteúdo dos demais subtópicos."
+        )
+
+    return "\n".join(linhas) + f"\n\n{instrucao}"
 
 
 def system_gerar_quiz_modulo(modulo_nome: str, banca: str = "") -> str:
@@ -215,7 +228,7 @@ def system_gerar_quiz_modulo(modulo_nome: str, banca: str = "") -> str:
     )
 
 
-def user_gerar_quiz_modulo(modulo_nome: str, topicos: list) -> str:
+def user_gerar_quiz_modulo(modulo_nome: str, topicos: list, subtopicos_filtro: list | None = None) -> str:
     """Formata todos os tópicos e subtópicos do módulo para o quiz de nível 3."""
     linhas = []
     for t in topicos[:8]:
@@ -227,10 +240,23 @@ def user_gerar_quiz_modulo(modulo_nome: str, topicos: list) -> str:
             linhas.append(f"Tópico: {t}")
 
     conteudo = "\n".join(linhas) if linhas else modulo_nome
+
+    instrucao = "Gere as 5 questões cruzando tópicos distantes com escalonamento fácil → difícil."
+    filtro_bloco = ""
+    if subtopicos_filtro:
+        filtro_linhas = ["RESTRIÇÃO: O candidato estudou apenas os seguintes subtópicos:"]
+        for sub in subtopicos_filtro:
+            filtro_linhas.append(f"  ✓ {sub}")
+        filtro_bloco = "\n" + "\n".join(filtro_linhas) + "\n"
+        instrucao = (
+            "Gere as 5 questões cobrindo SOMENTE os subtópicos marcados com ✓ acima. "
+            "Não inclua conteúdo de outros subtópicos."
+        )
+
     return (
         f"Módulo: {modulo_nome}\n\n"
-        f"Conteúdo disponível (tópicos e subtópicos):\n{conteudo}\n\n"
-        "Gere as 5 questões cruzando tópicos distantes com escalonamento fácil → difícil."
+        f"Conteúdo disponível (tópicos e subtópicos):\n{conteudo}\n"
+        f"{filtro_bloco}\n{instrucao}"
     )
 
 

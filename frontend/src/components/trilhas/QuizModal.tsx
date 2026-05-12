@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FlashcardDeck } from "./FlashcardDeck";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -33,11 +33,19 @@ interface Proficiencia {
   subtopicos: Record<string, ProficienciaEntry>;
 }
 
+interface AutoStart {
+  tipo: TipoQuiz;
+  referencia: string;
+  topico_nome?: string;
+}
+
 interface Props {
   moduloId: number;
   moduloNome: string;
   topicos: string[] | TopicoAninhado[];
   proficiencia?: Proficiencia;
+  subtopicosEstudados?: string[];  // subtópicos com checkbox marcado
+  autoStart?: AutoStart;           // pula o seletor e começa direto
   onFechar: () => void;
   onConcluido?: (
     estrelas: number,
@@ -106,15 +114,17 @@ function ProfBadge({ entry }: { entry: ProficienciaEntry | undefined }) {
   );
 }
 
-export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFechar, onConcluido }: Props) {
+export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, subtopicosEstudados, autoStart, onFechar, onConcluido }: Props) {
   const prof = proficiencia ?? { modulo: null, topicos: {}, subtopicos: {} };
   const nested = isNested(topicos);
+  const temEstudados = (subtopicosEstudados ?? []).length > 0;
 
   // Seleção de nível
-  const [tipoSelecionado, setTipoSelecionado] = useState<TipoQuiz>("modulo");
+  const [tipoSelecionado, setTipoSelecionado] = useState<TipoQuiz>(autoStart?.tipo ?? "modulo");
   const [regenerar, setRegerar] = useState(false);
+  const [somenteEstudados, setSomenteEstudados] = useState(false);
   const [topicoSelecionado, setTopicoSelecionado] = useState<TopicoAninhado | null>(null);
-  const [subtopico, setSubtopico] = useState("");
+  const [subtopico, setSubtopico] = useState(autoStart?.referencia ?? "");
 
   // Quiz
   const [fase, setFase] = useState<Fase>("selecionando_nivel");
@@ -132,6 +142,14 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
   } | null>(null);
   const [flashcardAberto, setFlashcardAberto] = useState(false);
   const [erro, setErro] = useState("");
+
+  // autoStart: pula o seletor e inicia o quiz diretamente
+  useEffect(() => {
+    if (autoStart) {
+      iniciarQuiz(autoStart.tipo, autoStart.referencia, autoStart.topico_nome ?? "");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ──────────────────────────────────────────────
   // Seleção de nível
@@ -164,11 +182,20 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
     const token = localStorage.getItem("access_token");
     if (!token) { setErro("Faça login para usar o quiz."); setFase("erro"); return; }
 
+    // Filtra subtópicos estudados se o toggle estiver ativo (apenas para tipo modulo/topico)
+    const filtro = somenteEstudados && tipo !== "subtopico" && (subtopicosEstudados ?? []).length > 0
+      ? subtopicosEstudados
+      : undefined;
+
     try {
       const res = await fetch(`${API_URL}/api/llm/quiz/${moduloId}/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tipo, referencia, topico_nome, ...(regenerar && { regenerar: true }) }),
+        body: JSON.stringify({
+          tipo, referencia, topico_nome,
+          ...(regenerar && { regenerar: true }),
+          ...(filtro && { subtopicos_filtro: filtro }),
+        }),
       });
       const data = await res.json();
       if (!data.questoes?.length) throw new Error("Sem questões.");
@@ -349,6 +376,26 @@ export function QuizModal({ moduloId, moduloNome, topicos, proficiencia, onFecha
                   </button>
                 ))}
               </div>
+
+              {/* Toggle: só o que estudei */}
+              {temEstudados && tipoSelecionado !== "subtopico" && (
+                <label className="flex items-start gap-2 cursor-pointer select-none mt-1 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={somenteEstudados}
+                    onChange={(e) => setSomenteEstudados(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-green-600 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-medium text-green-800">
+                      Só o que já estudei
+                    </span>
+                    <p className="text-[10px] text-green-600 mt-0.5">
+                      {subtopicosEstudados?.length} subtópico{subtopicosEstudados?.length !== 1 ? "s" : ""} marcado{subtopicosEstudados?.length !== 1 ? "s" : ""} — o quiz cobre apenas esses
+                    </p>
+                  </div>
+                </label>
+              )}
 
               {/* Opção de regenerar */}
               <label className="flex items-center gap-2 cursor-pointer select-none mt-1">

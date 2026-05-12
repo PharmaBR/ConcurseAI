@@ -184,12 +184,13 @@ def gerar_quiz_view(request, modulo_id):
     referencia = body.get("referencia", "").strip()
     topico_nome = body.get("topico_nome", "").strip()
     regenerar = body.get("regenerar", False)
+    subtopicos_filtro = body.get("subtopicos_filtro") or None  # lista de nomes ou None
 
     if tipo not in ("subtopico", "topico", "modulo"):
         return Response({"detail": "Tipo inválido. Use 'subtopico', 'topico' ou 'modulo'."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Cache: retorna quiz existente salvo para este (modulo, tipo, referencia)
-    if not regenerar:
+    # Cache: ignora quando filtro está ativo (quiz personalizado não deve ser cacheado)
+    if not regenerar and not subtopicos_filtro:
         quiz_existente = QuizGerado.objects.filter(modulo=modulo, tipo=tipo, referencia=referencia).first()
         if quiz_existente:
             return Response({"questoes": quiz_existente.questoes}, status=status.HTTP_200_OK)
@@ -198,7 +199,8 @@ def gerar_quiz_view(request, modulo_id):
 
     try:
         data = async_to_sync(gerar_quiz_para_modulo)(
-            modulo, banca=banca, tipo=tipo, referencia=referencia, topico_nome=topico_nome
+            modulo, banca=banca, tipo=tipo, referencia=referencia,
+            topico_nome=topico_nome, subtopicos_filtro=subtopicos_filtro,
         )
     except LLMServiceError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
