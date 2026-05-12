@@ -54,6 +54,16 @@ class Concurso(models.Model):
         blank=True,
         help_text="Cole aqui o texto extraído do edital. Este campo alimenta a IA para gerar trilhas.",
     )
+    # Quando preenchido, este concurso foi criado pelo próprio usuário (não pelo admin)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="concursos_criados",
+        verbose_name="criado por",
+        help_text="Preenchido quando o concurso foi criado diretamente pelo usuário.",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

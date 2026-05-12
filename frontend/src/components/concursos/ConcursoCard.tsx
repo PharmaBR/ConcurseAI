@@ -78,8 +78,15 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
   return (
     <div className="border rounded-lg p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="font-semibold text-lg leading-tight">{concurso.orgao}</h2>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-semibold text-lg leading-tight">{concurso.orgao}</h2>
+            {concurso.is_proprio && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0">
+                meu
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 text-sm">{concurso.cargo}</p>
         </div>
         <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${STATUS_COLORS[concurso.status]}`}>
@@ -110,6 +117,14 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
         </p>
       )}
 
+      {/* Aviso quando o edital ainda não foi adicionado */}
+      {!concurso.tem_edital && !trilhaId && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+          <span className="shrink-0">📄</span>
+          <span>Este concurso ainda não tem edital cadastrado. A geração de trilha exige o texto do edital.</span>
+        </div>
+      )}
+
       {/* Erro inline (substitui alert()) */}
       {erroGerar && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
@@ -130,10 +145,11 @@ export function ConcursoCard({ concurso, salvo, savedId, trilhaId, onSalvar, onR
         ) : (
           <button
             onClick={handleGerarTrilha}
-            disabled={gerando}
+            disabled={gerando || !concurso.tem_edital}
+            title={!concurso.tem_edital ? "Edital não cadastrado — não é possível gerar trilha" : undefined}
             className={`flex-1 text-white text-sm py-2 rounded-lg font-medium transition-colors shadow-sm ${
-              gerando
-                ? "bg-blue-400 cursor-not-allowed"
+              gerando || !concurso.tem_edital
+                ? "bg-blue-300 cursor-not-allowed"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
           >

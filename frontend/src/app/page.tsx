@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ConcursoList } from "@/components/concursos/ConcursoList";
-import { useConcursos } from "@/hooks/useConcursos";
+import { CriarConcursoModal } from "@/components/concursos/CriarConcursoModal";
+import { useConcursos, Concurso } from "@/hooks/useConcursos";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // TODO FASE 3: substituir cards estáticos por <C1Component> da Thesys
 
 export default function Home() {
-  const { concursos, salvos, loading, erro, buscar, salvar, removerSalvo } = useConcursos();
+  const router = useRouter();
+  const { concursos, salvos, loading, erro, buscar, salvar, removerSalvo, criar } = useConcursos();
   const [statusFiltro, setStatusFiltro] = useState("");
   const [areaFiltro, setAreaFiltro] = useState("");
   const [trilhasMap, setTrilhasMap] = useState<Record<string, string>>({});
+  const [modalAberto, setModalAberto] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -40,13 +44,53 @@ export default function Home() {
     });
   }
 
+  async function handleConcursoCriado(concurso: Concurso) {
+    setModalAberto(false);
+    // Gera a trilha automaticamente logo após a criação
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/llm/trilha/${concurso.id}/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/trilha/${data.trilha_id}`);
+      }
+      // Se falhar, o usuário cai na listagem e pode gerar manualmente pelo card
+    } catch {
+      // silencioso — o concurso já foi criado e aparece na lista
+    }
+  }
+
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-2">ConcurseAI</h1>
-      <p className="text-gray-500 mb-6">Prepare-se para concursos públicos com inteligência artificial.</p>
+      <div className="flex items-start justify-between mb-2 gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">ConcurseAI</h1>
+          <p className="text-gray-500 mt-1">Prepare-se para concursos públicos com inteligência artificial.</p>
+        </div>
+        <button
+          onClick={() => setModalAberto(true)}
+          className="shrink-0 bg-blue-600 text-white text-sm px-4 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+        >
+          <span className="text-base leading-none">+</span>
+          Adicionar meu concurso
+        </button>
+      </div>
+
+      {/* Modal de criação */}
+      {modalAberto && (
+        <CriarConcursoModal
+          criar={criar}
+          onClose={() => setModalAberto(false)}
+          onCriado={handleConcursoCriado}
+        />
+      )}
 
       {/* Filtros */}
-      <div className="flex gap-3 mb-6 flex-wrap">
+      <div className="flex gap-3 mb-6 mt-6 flex-wrap">
         <select
           value={statusFiltro}
           onChange={(e) => setStatusFiltro(e.target.value)}

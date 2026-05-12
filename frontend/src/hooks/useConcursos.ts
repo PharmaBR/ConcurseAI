@@ -27,6 +27,19 @@ export interface Concurso {
   inscricao_fim: string | null;
   edital_url: string;
   criado_em: string;
+  /** True se o campo edital_texto está preenchido (trilha pode ser gerada) */
+  tem_edital: boolean;
+  /** True se foi criado pelo usuário logado */
+  is_proprio?: boolean;
+}
+
+export interface CriarConcursoPayload {
+  orgao: string;
+  cargo: string;
+  area: "federal" | "estadual" | "municipal" | "militar";
+  banca_nome?: string;
+  edital_texto: string;
+  edital_url?: string;
 }
 
 export interface ConcursoSalvo {
@@ -111,11 +124,39 @@ export function useConcursos() {
     setSalvos((prev) => prev.filter((s) => s.id !== id));
   }
 
+  /**
+   * Cria um concurso pessoal com edital colado pelo usuário.
+   * Retorna o concurso criado (incluindo o id para redirect).
+   */
+  async function criar(payload: CriarConcursoPayload): Promise<Concurso> {
+    const token = getToken();
+    if (!token) throw new Error("Faça login para adicionar um concurso.");
+    const res = await fetch(`${API_URL}/api/concursos/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const detail =
+        (data as { detail?: string; edital_texto?: string[] }).detail ??
+        (data as { edital_texto?: string[] }).edital_texto?.[0] ??
+        "Erro ao criar concurso.";
+      throw new Error(detail);
+    }
+    // Atualiza a lista local para que o novo card apareça imediatamente
+    setConcursos((prev) => [data as Concurso, ...prev]);
+    return data as Concurso;
+  }
+
   // Carrega na montagem
   useEffect(() => {
     buscar();
     buscarSalvos();
   }, []);
 
-  return { concursos, salvos, loading, erro, buscar, salvar, removerSalvo };
+  return { concursos, salvos, loading, erro, buscar, salvar, removerSalvo, criar };
 }
